@@ -17,30 +17,43 @@
             <span>ReadWell</span>
         </div>
         
-        <nav class="main-nav">
-            <ul>
-                <li><a href="index.html"><i class="fas fa-home"></i> Home</a></li>
-                <li><a href="browse.html" class="active"><i class="fas fa-compass"></i> Browse</a></li>
-                <li><a href="#"><i class="fas fa-bookmark"></i> My Library</a></li>
-                <li><a href="#"><i class="fas fa-user"></i> Profile</a></li>
-            </ul>
-        </nav>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="home.html"><i class="fas fa-home"></i> Home</a></li>
+                    <li><a href="browse.html" class="active"><i class="fas fa-compass"></i> Browse</a></li>
+                    <li><a href="library.html" id="myLibraryLink"><i class="fas fa-bookmark"></i> My Library</a></li>
+                    <li><a href="profile.html" id="profileLink" style="display: none;"><i class="fas fa-user"></i> Profile</a></li>
+                </ul>
+            </nav>
 
-        <div class="header-actions">
-            <div class="search-bar">
-                <input type="text" id="globalSearch" placeholder="Search by title, author, or genre...">
-                <button onclick="performSearch()"><i class="fas fa-search"></i></button>
+            <div class="header-actions">
+                <div class="search-bar">
+                    <input type="text" id="globalSearch" placeholder="Search by title, author, or genre...">
+                    <button onclick="performSearch()"><i class="fas fa-search"></i></button>
+                </div>
+                <button class="btn-notification">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge">3</span>
+                </button>
+
+                <!-- Theme Toggle Button -->
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+
+                <!-- Auth Buttons -->
+                <div id="authButtons" style="display: none;">
+                    <button class="btn btn-primary" onclick="window.location.href='dashboard.html'">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                </div>
+                <div id="userMenu" style="display: none;">
+                    <span id="userName" style="color: #3498db !important; font-weight: 700; margin-right: 1rem; background: rgba(52, 152, 219, 0.15); padding: 0.3rem 0.6rem; border-radius: 15px;"></span>
+                    <button class="btn btn-secondary" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
             </div>
-            <button class="btn-notification">
-                <i class="fas fa-bell"></i>
-                <span class="notification-badge">3</span>
-            </button>
-
-            <!-- Theme Toggle Button (added as requested) -->
-            <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
-                <i class="fas fa-moon"></i>
-            </button>
-        </div>
     </div>
 </header>
 
@@ -57,14 +70,6 @@
             <!-- Browse Controls -->
             <div class="browse-controls">
                 <div class="controls-left">
-                    <div class="view-toggle">
-                        <button class="view-btn active" data-view="grid">
-                            <i class="fas fa-th"></i>
-                        </button>
-                        <button class="view-btn" data-view="list">
-                            <i class="fas fa-list"></i>
-                        </button>
-                    </div>
                     <div class="results-count">
                         Showing <span id="resultsCount">24</span> results
                     </div>
@@ -89,8 +94,8 @@
             </div>
 
             <div class="browse-content">
-                <!-- Filters Sidebar -->
-                <aside class="filters-sidebar" id="filtersSidebar">
+                <!-- Filters Sidebar - Fixed and Scrollable -->
+                <aside class="filters-sidebar fixed-sidebar" id="filtersSidebar">
                     <div class="filters-header">
                         <h3>Filters</h3>
                         <button class="btn-clear" onclick="clearAllFilters()">Clear All</button>
@@ -199,11 +204,8 @@
                     <div class="filter-group">
                         <label>Language</label>
                         <select id="languageSelect">
-                            <option value="all">All Languages</option>
                             <option value="english">English</option>
-                            <option value="spanish">Spanish</option>
-                            <option value="french">French</option>
-                            <option value="german">German</option>
+                            <option value="urdu">Urdu</option>
                         </select>
                     </div>
 
@@ -212,9 +214,9 @@
                     </button>
                 </aside>
 
-                <!-- Books Grid -->
+                <!-- Books List -->
                 <section class="books-results">
-                    <div class="books-container grid-view" id="booksContainer">
+                    <div class="books-container list-view" id="booksContainer">
                         <!-- Books will be dynamically loaded here -->
                     </div>
 
@@ -309,6 +311,53 @@
             </div>
         </div>
     </footer>
+
+    <!-- Auth Modals -->
+    <div id="loginModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('loginModal')">&times;</span>
+            <h2>Login</h2>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+            <p style="margin-top: 1rem; text-align: center;">
+                Don't have an account? <a href="#" onclick="closeModal('loginModal'); showSignupModal();">Sign Up</a>
+            </p>
+        </div>
+    </div>
+
+    <div id="signupModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('signupModal')">&times;</span>
+            <h2>Sign Up</h2>
+            <form id="signupForm" onsubmit="handleSignup(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="signupUsername" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="signupEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="signupPassword" required minlength="6">
+                </div>
+                <button type="submit" class="btn btn-primary">Sign Up</button>
+            </form>
+            <p style="margin-top: 1rem; text-align: center;">
+                Already have an account? <a href="#" onclick="closeModal('signupModal'); showLoginModal();">Login</a>
+            </p>
+        </div>
+    </div>
 
     <script src="browse.js"></script>
 </body>

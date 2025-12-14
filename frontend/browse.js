@@ -5,70 +5,280 @@ class BrowseManager {
         this.filteredBooks = [];
         this.currentPage = 1;
         this.booksPerPage = 20;
-        this.currentView = 'grid';
+        this.totalPages = 1;
+        this.totalBooks = 0;
+        this.currentView = 'list'; // Only list view
         this.filters = {
             search: '',
             genre: 'all',
-            language: 'all',
-            sort: 'relevance' // Add sort filter
+            language: 'english', // Default to English
+            sort: 'relevance'
         };
 
         this.API_BASE = 'http://localhost:5000/api';
+        this.token = localStorage.getItem('readwell_token');
+        this.user = null;
         this.init();
     }
 
-    init() {
+    async init() {
         this.setupEnhancedStyles();
         this.setupSkeletonLoading();
         this.setupBookmarkSystem();
         this.setupThemeManager();
-        this.loadPopularBooks();
+        await this.checkAuth();
+        
+        // Check for URL parameters (from profile page)
+        const urlParams = new URLSearchParams(window.location.search);
+        const bookId = urlParams.get('book');
+        const action = urlParams.get('action');
+        
+        if (bookId && action === 'progress' && this.user) {
+            // Load books first, then show progress
+            await this.loadPopularBooks();
+            const book = this.books.find(b => b.id === bookId) || this.filteredBooks.find(b => b.id === bookId);
+            if (book) {
+                setTimeout(() => {
+                    this.showReadingProgress(bookId, book.title);
+                }, 500);
+            }
+        } else {
+            this.loadPopularBooks();
+        }
+        
         this.setupEventListeners();
         this.setupSearchSuggestions();
         this.setupKeyboardNavigation();
     }
 
+    async checkAuth() {
+        if (this.token) {
+            try {
+                const response = await fetch(`${this.API_BASE}/auth/verify`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    this.user = data.user;
+                    this.updateAuthUI();
+                } else {
+                    localStorage.removeItem('readwell_token');
+                    this.token = null;
+                    this.updateAuthUI();
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                this.updateAuthUI();
+            }
+        } else {
+            this.updateAuthUI();
+        }
+    }
+
+    updateAuthUI() {
+        const authButtons = document.getElementById('authButtons');
+        const userMenu = document.getElementById('userMenu');
+        const userName = document.getElementById('userName');
+        const profileLink = document.getElementById('profileLink');
+        
+        if (this.user) {
+            if (authButtons) authButtons.style.display = 'none';
+            if (userMenu) {
+                userMenu.style.display = 'flex';
+                userMenu.style.alignItems = 'center';
+            }
+            if (userName) userName.textContent = this.user.username;
+            if (profileLink) profileLink.style.display = 'block';
+        } else {
+            if (authButtons) authButtons.style.display = 'flex';
+            if (userMenu) userMenu.style.display = 'none';
+            if (profileLink) profileLink.style.display = 'none';
+        }
+    }
+    
+    // Make toggleUserDropdown available globally
+    static toggleUserDropdown() {
+        const dropdown = document.getElementById('userDropdown');
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+
     setupBookmarkSystem() {
+        // Keep localStorage as fallback, but prefer backend
         this.favorites = JSON.parse(localStorage.getItem('readwell_favorites')) || [];
         this.bookmarks = JSON.parse(localStorage.getItem('readwell_bookmarks')) || [];
+        this.libraryCache = {}; // Cache for library status
     }
 
-    isBookFavorited(bookId) {
-        return this.favorites.includes(bookId);
-    }
-
-    isBookBookmarked(bookId) {
-        return this.bookmarks.includes(bookId);
-    }
-
-    toggleFavorite(bookId, bookTitle) {
-        const index = this.favorites.indexOf(bookId);
+    async isBookFavorited(bookId) {
+        if (!this.user) return false;
         
-        if (index > -1) {
-            this.favorites.splice(index, 1);
-            this.showToast(`Removed "${bookTitle}" from favorites`, 'info');
-        } else {
-            this.favorites.push(bookId);
-            this.showToast(`Added "${bookTitle}" to favorites!`, 'success');
+        // Check cache first
+        if (this.libraryCache[bookId]) {
+            return this.libraryCache[bookId].type === 'favorite';
         }
         
-        localStorage.setItem('readwell_favorites', JSON.stringify(this.favorites));
-        this.updateBookIcons(bookId);
-    }
-
-    toggleBookmark(bookId, bookTitle) {
-        const index = this.bookmarks.indexOf(bookId);
-        
-        if (index > -1) {
-            this.bookmarks.splice(index, 1);
-            this.showToast(`Removed "${bookTitle}" from bookmarks`, 'info');
-        } else {
-            this.bookmarks.push(bookId);
-            this.showToast(`Bookmarked "${bookTitle}"!`, 'success');
+        // Check backend
+        try {
+            const response = await fetch(`${this.API_BASE}/library/check/${bookId}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                this.libraryCache[bookId] = data;
+                return data.type === 'favorite';
+            }
+        } catch (error) {
+            console.error('Error checking favorite:', error);
         }
         
-        localStorage.setItem('readwell_bookmarks', JSON.stringify(this.bookmarks));
-        this.updateBookIcons(bookId);
+        return false;
+    }
+
+    async isBookBookmarked(bookId) {
+        if (!this.user) return false;
+        
+        // Check cache first
+        if (this.libraryCache[bookId]) {
+            return this.libraryCache[bookId].type === 'bookmark';
+        }
+        
+        // Check backend
+        try {
+            const response = await fetch(`${this.API_BASE}/library/check/${bookId}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                this.libraryCache[bookId] = data;
+                return data.type === 'bookmark';
+            }
+        } catch (error) {
+            console.error('Error checking bookmark:', error);
+        }
+        
+        return false;
+    }
+
+    async toggleFavorite(bookId, bookTitle, bookAuthor = 'Unknown', bookCover = '') {
+        if (!this.user) {
+            this.showToast('Please login to save favorites', 'error');
+            showLoginModal();
+            return;
+        }
+
+        const isFavorited = await this.isBookFavorited(bookId);
+        
+        try {
+            if (isFavorited) {
+                // Remove from favorites
+                const response = await fetch(`${this.API_BASE}/library/${bookId}?type=favorite`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    this.showToast(`Removed "${bookTitle}" from favorites`, 'info');
+                    delete this.libraryCache[bookId];
+                } else {
+                    this.showToast('Failed to remove from favorites', 'error');
+                }
+            } else {
+                // Add to favorites
+                const response = await fetch(`${this.API_BASE}/library`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.token}`
+                    },
+                    body: JSON.stringify({
+                        bookId,
+                        bookTitle,
+                        bookAuthor,
+                        bookCover,
+                        type: 'favorite'
+                    })
+                });
+                
+                if (response.ok) {
+                    this.showToast(`Added "${bookTitle}" to favorites!`, 'success');
+                    this.libraryCache[bookId] = { type: 'favorite', inLibrary: true };
+                } else {
+                    this.showToast('Failed to add to favorites', 'error');
+                }
+            }
+            
+            this.updateBookIcons(bookId);
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            this.showToast('Failed to update favorites', 'error');
+        }
+    }
+
+    async toggleBookmark(bookId, bookTitle, bookAuthor = 'Unknown', bookCover = '') {
+        if (!this.user) {
+            this.showToast('Please login to save bookmarks', 'error');
+            showLoginModal();
+            return;
+        }
+
+        const isBookmarked = await this.isBookBookmarked(bookId);
+        
+        try {
+            if (isBookmarked) {
+                // Remove from bookmarks
+                const response = await fetch(`${this.API_BASE}/library/${bookId}?type=bookmark`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    this.showToast(`Removed "${bookTitle}" from bookmarks`, 'info');
+                    delete this.libraryCache[bookId];
+                } else {
+                    this.showToast('Failed to remove bookmark', 'error');
+                }
+            } else {
+                // Add to bookmarks
+                const response = await fetch(`${this.API_BASE}/library`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.token}`
+                    },
+                    body: JSON.stringify({
+                        bookId,
+                        bookTitle,
+                        bookAuthor,
+                        bookCover,
+                        type: 'bookmark'
+                    })
+                });
+                
+                if (response.ok) {
+                    this.showToast(`Bookmarked "${bookTitle}"!`, 'success');
+                    this.libraryCache[bookId] = { type: 'bookmark', inLibrary: true };
+                } else {
+                    this.showToast('Failed to bookmark', 'error');
+                }
+            }
+            
+            this.updateBookIcons(bookId);
+        } catch (error) {
+            console.error('Error toggling bookmark:', error);
+            this.showToast('Failed to update bookmark', 'error');
+        }
     }
 
     updateBookIcons(bookId) {
@@ -443,20 +653,77 @@ class BrowseManager {
         `).join('');
     }
 
-    // Load popular books from Open Library
+    // Load popular books - try ratings API first, then fallback to Open Library
     async loadPopularBooks() {
         this.showLoading();
-        this.showNotification('Loading popular books...', 'info');
         
         try {
-            const response = await fetch(`${this.API_BASE}/openlibrary/popular`);
-            const books = await response.json();
+            // Check if Urdu is selected
+            if (this.filters.language === 'urdu') {
+                // Use dedicated Urdu API
+                const response = await fetch(`${this.API_BASE}/openlibrary/urdu?page=${this.currentPage}&limit=${this.booksPerPage}`);
+                const data = await response.json();
+                this.books = data.books || [];
+                this.filteredBooks = this.books;
+                this.updateDisplay();
+                this.hideLoading();
+                return;
+            }
+            
+            // Try to get popular books from ratings API
+            const ratingsResponse = await fetch(`${this.API_BASE}/ratings/popular/week`);
+            let books = [];
+            
+            if (ratingsResponse.ok) {
+                const popularBooks = await ratingsResponse.json();
+                if (popularBooks.length > 0) {
+                    // Fetch book details for popular books
+                    books = await Promise.all(
+                        popularBooks.slice(0, 20).map(async (book) => {
+                            try {
+                                const bookResponse = await fetch(`${this.API_BASE}/openlibrary/book${book.bookId}`);
+                                if (bookResponse.ok) {
+                                    const bookData = await bookResponse.json();
+                                    return {
+                                        ...bookData,
+                                        averageRating: book.averageRating,
+                                        totalRatings: book.totalRatings
+                                    };
+                                }
+                            } catch (error) {
+                                console.error('Error fetching book details:', error);
+                            }
+                            // Fallback
+                            return {
+                                id: book.bookId,
+                                title: book.bookTitle,
+                                author: 'Unknown',
+                                cover: 'https://via.placeholder.com/200x300/3498db/ffffff?text=No+Cover',
+                                year: 'Unknown',
+                                description: 'Popular book this week',
+                                averageRating: book.averageRating,
+                                totalRatings: book.totalRatings
+                            };
+                        })
+                    );
+                }
+            }
+            
+            // Fallback to Open Library if no popular books from ratings
+            if (books.length === 0) {
+                const response = await fetch(`${this.API_BASE}/openlibrary/popular`);
+                books = await response.json();
+            }
+            
+            // Load ratings if user is authenticated
+            if (this.user) {
+                await this.loadBookRatings(books);
+            }
             
             this.books = books;
             this.filteredBooks = this.books;
             this.updateDisplay();
             this.hideLoading();
-            this.showNotification(`Loaded ${books.length} popular books`, 'success', 2000);
         } catch (error) {
             console.error('Error loading books:', error);
             this.showError('Failed to load books. Please check your connection and try again.');
@@ -472,27 +739,52 @@ class BrowseManager {
         try {
             let url;
             
-            if (this.filters.genre && this.filters.genre !== 'all') {
-                url = `${this.API_BASE}/openlibrary/category/${this.filters.genre}?page=${this.currentPage}&limit=${this.booksPerPage}`;
-            } else if (this.filters.search) {
-                url = `${this.API_BASE}/openlibrary/search?q=${encodeURIComponent(this.filters.search)}&page=${this.currentPage}&limit=${this.booksPerPage}`;
+            // Handle language-specific API calls
+            if (this.filters.language === 'urdu') {
+                // For Urdu, use dedicated Urdu API endpoint
+                if (this.filters.genre && this.filters.genre !== 'all') {
+                    url = `${this.API_BASE}/openlibrary/category/${this.filters.genre}?page=${this.currentPage}&limit=${this.booksPerPage}&language=urdu`;
+                } else if (this.filters.search) {
+                    url = `${this.API_BASE}/openlibrary/search?q=${encodeURIComponent(this.filters.search)}&page=${this.currentPage}&limit=${this.booksPerPage}&language=urdu`;
+                } else {
+                    url = `${this.API_BASE}/openlibrary/urdu?page=${this.currentPage}&limit=${this.booksPerPage}`;
+                }
             } else {
-                // Show popular books
-                this.loadPopularBooks();
-                return;
+                // For English, use standard endpoints
+                const languageParam = this.filters.language === 'english' ? '&language=english' : '';
+                
+                if (this.filters.genre && this.filters.genre !== 'all') {
+                    url = `${this.API_BASE}/openlibrary/category/${this.filters.genre}?page=${this.currentPage}&limit=${this.booksPerPage}${languageParam}`;
+                } else if (this.filters.search) {
+                    url = `${this.API_BASE}/openlibrary/search?q=${encodeURIComponent(this.filters.search)}&page=${this.currentPage}&limit=${this.booksPerPage}${languageParam}`;
+                } else {
+                    this.loadPopularBooks();
+                    return;
+                }
             }
             
             // Add sort parameter if applicable
             if (this.filters.sort && this.filters.sort !== 'relevance') {
-                // Note: Open Library has limited sorting options
-                // We'll handle client-side sorting for some options
                 url += `&sort=${this.getOpenLibrarySort(this.filters.sort)}`;
             }
             
             const response = await fetch(url);
             const data = await response.json();
-            this.filteredBooks = this.applyClientSideSorting(data.books);
-            this.updateResultsCount(data.total, data.page, data.totalPages);
+            this.filteredBooks = this.applyClientSideSorting(data.books || data);
+            
+            // Store pagination info
+            this.totalPages = data.totalPages || Math.ceil((data.total || this.filteredBooks.length) / this.booksPerPage) || 1;
+            this.totalBooks = data.total || this.filteredBooks.length;
+            
+            // Load ratings and library status for books
+            if (this.user) {
+                await Promise.all([
+                    this.loadBookRatings(this.filteredBooks),
+                    this.loadLibraryStatus(this.filteredBooks)
+                ]);
+            }
+            
+            this.updateResultsCount(this.totalBooks, data.page || this.currentPage, this.totalPages);
             
             this.updateDisplay();
             this.hideLoading();
@@ -502,6 +794,20 @@ class BrowseManager {
             this.showError('Search failed. Please check your connection and try again.');
             this.hideLoading();
             this.hideSearchProgress();
+        }
+    }
+
+    async loadBookRatings(books) {
+        for (let book of books) {
+            try {
+                const response = await fetch(`${this.API_BASE}/ratings/book/${book.id}/average`);
+                const data = await response.json();
+                book.averageRating = data.averageRating || 0;
+                book.totalRatings = data.totalRatings || 0;
+            } catch (error) {
+                book.averageRating = 0;
+                book.totalRatings = 0;
+            }
         }
     }
 
@@ -531,21 +837,15 @@ class BrowseManager {
     }
 
     setupEventListeners() {
-        // View toggle with enhanced feedback
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const view = e.target.closest('.view-btn').dataset.view;
-                this.setView(view);
-                this.showToast(`Switched to ${view} view`, 'info');
-            });
-        });
-
         // Search filter with debouncing
-        document.getElementById('searchFilter').addEventListener('input', (e) => {
-            this.filters.search = e.target.value;
-            this.currentPage = 1;
-            this.debounce(() => this.searchBooks(), 500);
-        });
+        const searchFilter = document.getElementById('searchFilter');
+        if (searchFilter) {
+            searchFilter.addEventListener('input', (e) => {
+                this.filters.search = e.target.value;
+                this.currentPage = 1;
+                this.debounce(() => this.searchBooks(), 500);
+            });
+        }
 
         // Global search
         const globalSearch = document.getElementById('globalSearch');
@@ -578,39 +878,58 @@ class BrowseManager {
             });
         });
 
-        // Language filter
-        document.getElementById('languageSelect').addEventListener('change', (e) => {
-            this.filters.language = e.target.value;
-            // Note: Open Library API doesn't support language filtering in basic search
-            this.showToast('Language filter applied (note: Open Library search may not support this)', 'info');
-        });
+        // Language filter - Updated for English/Urdu only
+        const languageSelect = document.getElementById('languageSelect');
+        if (languageSelect) {
+            languageSelect.addEventListener('change', (e) => {
+                this.filters.language = e.target.value;
+                this.currentPage = 1;
+                this.showToast(`Filtering ${e.target.value} books`, 'info');
+                this.searchBooks();
+            });
+        }
 
         // Sort dropdown
-        document.getElementById('sortSelect').addEventListener('change', (e) => {
-            this.filters.sort = e.target.value;
-            this.currentPage = 1;
-            this.showToast(`Sorted by: ${e.target.options[e.target.selectedIndex].text}`, 'info');
-            this.searchBooks();
-        });
+        const sortSelect = document.getElementById('sortSelect');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', (e) => {
+                this.filters.sort = e.target.value;
+                this.currentPage = 1;
+                this.showToast(`Sorted by: ${e.target.options[e.target.selectedIndex].text}`, 'info');
+                this.searchBooks();
+            });
+        }
 
         // Pagination with enhanced feedback
-        document.getElementById('prevPage').addEventListener('click', () => {
-            this.previousPage();
-        });
+        const prevPage = document.getElementById('prevPage');
+        if (prevPage) {
+            prevPage.addEventListener('click', () => {
+                this.previousPage();
+            });
+        }
 
-        document.getElementById('nextPage').addEventListener('click', () => {
-            this.nextPage();
-        });
+        const nextPage = document.getElementById('nextPage');
+        if (nextPage) {
+            nextPage.addEventListener('click', () => {
+                this.nextPage();
+            });
+        }
 
         // Filter toggle for mobile
-        document.getElementById('filterToggle').addEventListener('click', () => {
-            this.toggleFilters();
-        });
+        const filterToggle = document.getElementById('filterToggle');
+        if (filterToggle) {
+            filterToggle.addEventListener('click', () => {
+                this.toggleFilters();
+            });
+        }
 
         // Enhanced clear filters
-        document.querySelector('.btn-clear').addEventListener('click', () => {
-            this.showToast('All filters cleared', 'info');
-        });
+        const clearBtn = document.querySelector('.btn-clear');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.showToast('All filters cleared', 'info');
+            });
+        }
     }
 
     setupKeyboardNavigation() {
@@ -630,23 +949,14 @@ class BrowseManager {
         });
     }
 
-    setView(view) {
-        this.currentView = view;
-        
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.view === view);
-        });
-
-        const booksContainer = document.getElementById('booksContainer');
-        booksContainer.className = `books-container ${view}-view`;
-    }
+    // Removed setView - only list view is supported now
 
     updateDisplay() {
         this.renderBooks();
         this.updatePagination();
     }
 
-    renderBooks() {
+    async renderBooks() {
         const booksContainer = document.getElementById('booksContainer');
         const booksToShow = this.filteredBooks;
 
@@ -657,7 +967,32 @@ class BrowseManager {
 
         this.hideNoResults();
 
-        booksContainer.innerHTML = booksToShow.map(book => `
+        // Load user ratings if authenticated
+        const userRatings = {};
+        if (this.user) {
+            for (let book of booksToShow) {
+                try {
+                    const response = await fetch(`${this.API_BASE}/ratings/${book.id}`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.token}`
+                        }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        userRatings[book.id] = data.rating;
+                    }
+                } catch (error) {
+                    console.error('Error loading user rating:', error);
+                }
+            }
+        }
+
+        booksContainer.innerHTML = booksToShow.map(book => {
+            const userRating = userRatings[book.id] || null;
+            const avgRating = book.averageRating || 0;
+            const totalRatings = book.totalRatings || 0;
+            
+            return `
             <div class="book-card" tabindex="0" role="button" aria-label="${book.title} by ${book.author}" 
                  onkeypress="if(event.key==='Enter') readBook('${book.id}', '${book.title}', '${book.author}')">
                 <div class="book-cover">
@@ -665,6 +1000,7 @@ class BrowseManager {
                          onerror="this.src='https://via.placeholder.com/200x300/3498db/ffffff?text=No+Cover'"
                          loading="lazy">
                     <div class="book-overlay">
+                        ${this.user ? `
                         <button class="btn-icon" aria-label="${this.isBookFavorited(book.id) ? 'Remove from favorites' : 'Add to favorites'}" 
                                 onclick="browseManager.toggleFavorite('${book.id}', '${book.title}')">
                             <i class="${this.isBookFavorited(book.id) ? 'fas' : 'far'} fa-heart"></i>
@@ -673,6 +1009,7 @@ class BrowseManager {
                                 onclick="browseManager.toggleBookmark('${book.id}', '${book.title}')">
                             <i class="${this.isBookBookmarked(book.id) ? 'fas' : 'far'} fa-bookmark"></i>
                         </button>
+                        ` : ''}
                         <button class="btn-read" 
                                 onclick="readBook('${book.id}', '${book.title}', '${book.author}')">
                             Read Now
@@ -683,21 +1020,345 @@ class BrowseManager {
                     <h3>${book.title}</h3>
                     <p class="author">${book.author}</p>
                     <div class="rating">
-                        <div class="stars">
-                            ${this.renderStars(4.0)}
+                        <div class="stars" onclick="event.stopPropagation();">
+                            ${this.renderRatingStars(avgRating, book.id, userRating)}
                         </div>
-                        <span class="rating-value">4.0</span>
+                        <span class="rating-value">${avgRating > 0 ? avgRating.toFixed(1) : 'No ratings'}</span>
+                        ${totalRatings > 0 ? `<span class="rating-count">(${totalRatings})</span>` : ''}
                     </div>
                     <p class="book-year">${book.year}</p>
                     <p class="book-description">${book.description}</p>
+                    ${this.user ? `
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary btn-small" onclick="event.stopPropagation(); browseManager.showReadingProgress('${book.id}', '${book.title.replace(/'/g, "\\'")}')">
+                            <i class="fas fa-book-open"></i> Reading Progress
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="event.stopPropagation(); browseManager.openBook('${book.id}', '${book.title.replace(/'/g, "\\'")}')">
+                            <i class="fas fa-book-reader"></i> Read Now
+                        </button>
+                    </div>
+                    ` : `
+                    <button class="btn btn-primary btn-small" onclick="event.stopPropagation(); showLoginModal()" style="margin-top: 0.5rem;">
+                        <i class="fas fa-sign-in-alt"></i> Login to Track Progress
+                    </button>
+                    `}
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
         
         // Apply initial icon states
         booksToShow.forEach(book => {
             this.updateBookIcons(book.id);
         });
+    }
+
+    renderRatingStars(avgRating, bookId, userRating) {
+        let stars = '';
+        const rating = userRating || avgRating;
+        
+        for (let i = 1; i <= 5; i++) {
+            if (this.user) {
+                stars += `<i class="fas fa-star rating-star ${i <= rating ? 'active' : ''}" 
+                             onclick="event.stopPropagation(); browseManager.rateBook('${bookId}', ${i})"
+                             data-rating="${i}"></i>`;
+            } else {
+                if (i <= Math.floor(rating)) {
+                    stars += '<i class="fas fa-star"></i>';
+                } else if (i === Math.ceil(rating) && rating % 1 >= 0.5) {
+                    stars += '<i class="fas fa-star-half-alt"></i>';
+                } else {
+                    stars += '<i class="far fa-star"></i>';
+                }
+            }
+        }
+        return stars;
+    }
+
+    async rateBook(bookId, rating) {
+        if (!this.user) {
+            this.showToast('Please login to rate books', 'error');
+            showLoginModal();
+            return;
+        }
+
+        try {
+            const book = this.filteredBooks.find(b => b.id === bookId);
+            const response = await fetch(`${this.API_BASE}/ratings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
+                },
+                body: JSON.stringify({
+                    bookId,
+                    bookTitle: book.title,
+                    rating
+                })
+            });
+
+            if (response.ok) {
+                this.showToast(`Rated ${rating} stars!`, 'success');
+                // Reload ratings
+                await this.loadBookRatings(this.filteredBooks);
+                this.renderBooks();
+            } else {
+                this.showToast('Failed to submit rating', 'error');
+            }
+        } catch (error) {
+            console.error('Error rating book:', error);
+            this.showToast('Failed to submit rating', 'error');
+        }
+    }
+
+    async showReadingProgress(bookId, bookTitle) {
+        if (!this.user) {
+            this.showToast('Please login to track reading progress', 'error');
+            showLoginModal();
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.API_BASE}/reading-progress/${bookId}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                }
+            });
+
+            let progress = null;
+            if (response.ok) {
+                progress = await response.json();
+            } else if (response.status === 404) {
+                // No progress yet, create new
+                progress = null;
+            }
+
+            // Show reading progress modal
+            this.showReadingProgressModal(bookId, bookTitle, progress);
+        } catch (error) {
+            console.error('Error loading reading progress:', error);
+            this.showReadingProgressModal(bookId, bookTitle, null);
+        }
+    }
+
+    openBook(bookId, bookTitle) {
+        this.showToast(`Opening "${bookTitle}"...`, 'info');
+        setTimeout(() => {
+            const openLibraryUrl = `https://openlibrary.org${bookId}`;
+            window.open(openLibraryUrl, '_blank');
+        }, 500);
+    }
+
+    showReadingProgressModal(bookId, bookTitle, progress) {
+        // Remove existing modal if any
+        const existingModal = document.querySelector('.modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'block';
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        };
+        
+        const safeTitle = bookTitle.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+                <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+                <h2>Reading Progress: ${safeTitle}</h2>
+                <form id="progressForm" onsubmit="event.preventDefault(); browseManager.saveReadingProgress(event, '${bookId}', '${safeTitle}')">
+                    <div class="form-group">
+                        <label>Chapter</label>
+                        <input type="number" id="progressChapter" value="${progress?.chapter || 1}" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Page</label>
+                        <input type="number" id="progressPage" value="${progress?.page || 1}" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Paragraph</label>
+                        <input type="number" id="progressParagraph" value="${progress?.paragraph || 1}" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Line Number</label>
+                        <input type="number" id="progressLine" value="${progress?.lineNumber || 1}" min="1" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Progress
+                    </button>
+                    <a href="profile.html" class="btn btn-secondary" style="margin-left: 0.5rem;">
+                        <i class="fas fa-user"></i> View in Profile
+                    </a>
+                </form>
+                <div style="margin-top: 2rem;">
+                    <h3><i class="fas fa-quote-left"></i> Saved Quotes</h3>
+                    <div id="quotesList">
+                        ${progress?.quotes && progress.quotes.length > 0 ? 
+                            progress.quotes.map((quote, idx) => `
+                                <div class="quote-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem;">
+                                    <p style="font-style: italic; color: var(--text-primary); margin-bottom: 0.5rem;">"${quote.text}"</p>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-secondary);">
+                                        <span>Chapter ${quote.chapter || 'N/A'}, Page ${quote.page || 'N/A'}, Line ${quote.line || 'N/A'}</span>
+                                        <button class="btn btn-small" onclick="browseManager.deleteQuote('${bookId}', ${idx})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('') : 
+                            '<p style="color: var(--text-secondary);">No quotes saved yet.</p>'
+                        }
+                    </div>
+                    <div style="margin-top: 1.5rem;">
+                        <h4>Add Quote</h4>
+                        <form onsubmit="event.preventDefault(); browseManager.addQuote(event, '${bookId}')">
+                            <div class="form-group">
+                                <label>Quote Text</label>
+                                <textarea id="quoteText" required style="width: 100%; min-height: 100px; font-family: inherit;"></textarea>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <div class="form-group">
+                                    <label>Chapter (optional)</label>
+                                    <input type="number" id="quoteChapter" min="1" value="${progress?.chapter || ''}">
+                                </div>
+                                <div class="form-group">
+                                    <label>Page (optional)</label>
+                                    <input type="number" id="quotePage" min="1" value="${progress?.page || ''}">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Add Quote
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    async saveReadingProgress(event, bookId, bookTitle) {
+        event.preventDefault();
+        
+        const chapterInput = document.getElementById('progressChapter');
+        const pageInput = document.getElementById('progressPage');
+        const paragraphInput = document.getElementById('progressParagraph');
+        const lineInput = document.getElementById('progressLine');
+        
+        if (!chapterInput || !pageInput || !paragraphInput || !lineInput) {
+            this.showToast('Form fields not found', 'error');
+            return;
+        }
+        
+        const progress = {
+            bookId,
+            bookTitle,
+            chapter: parseInt(chapterInput.value) || 1,
+            page: parseInt(pageInput.value) || 1,
+            paragraph: parseInt(paragraphInput.value) || 1,
+            lineNumber: parseInt(lineInput.value) || 1
+        };
+
+        try {
+            const response = await fetch(`${this.API_BASE}/reading-progress`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
+                },
+                body: JSON.stringify(progress)
+            });
+
+            if (response.ok) {
+                this.showToast('Reading progress saved!', 'success');
+                // Reload progress
+                setTimeout(() => {
+                    this.showReadingProgress(bookId, bookTitle);
+                }, 500);
+            } else {
+                const errorData = await response.json();
+                this.showToast(errorData.message || 'Failed to save progress', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving progress:', error);
+            this.showToast('Failed to save progress', 'error');
+        }
+    }
+
+    async addQuote(event, bookId) {
+        event.preventDefault();
+        
+        const quoteText = document.getElementById('quoteText');
+        const quoteChapter = document.getElementById('quoteChapter');
+        const quotePage = document.getElementById('quotePage');
+        
+        if (!quoteText || !quoteText.value.trim()) {
+            this.showToast('Please enter a quote', 'error');
+            return;
+        }
+        
+        const quote = {
+            text: quoteText.value.trim(),
+            chapter: quoteChapter && quoteChapter.value ? parseInt(quoteChapter.value) : null,
+            page: quotePage && quotePage.value ? parseInt(quotePage.value) : null
+        };
+
+        try {
+            const response = await fetch(`${this.API_BASE}/reading-progress/${bookId}/quotes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
+                },
+                body: JSON.stringify(quote)
+            });
+
+            if (response.ok) {
+                this.showToast('Quote saved!', 'success');
+                if (quoteText) quoteText.value = '';
+                if (quoteChapter) quoteChapter.value = '';
+                if (quotePage) quotePage.value = '';
+                // Reload progress
+                const book = this.filteredBooks.find(b => b.id === bookId);
+                if (book) {
+                    setTimeout(() => {
+                        this.showReadingProgress(bookId, book.title);
+                    }, 500);
+                }
+            } else {
+                const errorData = await response.json();
+                this.showToast(errorData.message || 'Failed to save quote', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving quote:', error);
+            this.showToast('Failed to save quote', 'error');
+        }
+    }
+
+    async deleteQuote(bookId, quoteId) {
+        try {
+            const response = await fetch(`${this.API_BASE}/reading-progress/${bookId}/quotes/${quoteId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                }
+            });
+
+            if (response.ok) {
+                this.showToast('Quote deleted!', 'success');
+                const book = this.filteredBooks.find(b => b.id === bookId);
+                this.showReadingProgress(bookId, book.title);
+            } else {
+                this.showToast('Failed to delete quote', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting quote:', error);
+            this.showToast('Failed to delete quote', 'error');
+        }
     }
 
     renderStars(rating) {
@@ -719,23 +1380,36 @@ class BrowseManager {
     }
 
     updatePagination() {
-        const totalPages = Math.ceil(this.filteredBooks.length / this.booksPerPage);
+        const totalPages = this.totalPages || Math.ceil((this.filteredBooks.length || 100) / this.booksPerPage) || 1;
         const paginationNumbers = document.getElementById('paginationNumbers');
         const prevBtn = document.getElementById('prevPage');
         const nextBtn = document.getElementById('nextPage');
 
+        if (!paginationNumbers || !prevBtn || !nextBtn) return;
+
         prevBtn.classList.toggle('disabled', this.currentPage === 1);
-        nextBtn.classList.toggle('disabled', this.currentPage === totalPages || totalPages === 0);
+        nextBtn.classList.toggle('disabled', this.currentPage >= totalPages || totalPages === 0);
 
         let paginationHTML = '';
+        // Show current page + 4 more pages (total 5 pages visible)
         const maxVisiblePages = 5;
         let startPage = Math.max(1, this.currentPage - Math.floor(maxVisiblePages / 2));
         let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
+        // Adjust if we're near the end
         if (endPage - startPage + 1 < maxVisiblePages) {
             startPage = Math.max(1, endPage - maxVisiblePages + 1);
         }
 
+        // Show first page if not in range
+        if (startPage > 1) {
+            paginationHTML += `<button class="pagination-number" onclick="browseManager.goToPage(1)">1</button>`;
+            if (startPage > 2) {
+                paginationHTML += `<span class="pagination-ellipsis">...</span>`;
+            }
+        }
+
+        // Show page numbers
         for (let i = startPage; i <= endPage; i++) {
             paginationHTML += `
                 <button class="pagination-number ${i === this.currentPage ? 'active' : ''}" 
@@ -744,6 +1418,14 @@ class BrowseManager {
                     ${i}
                 </button>
             `;
+        }
+
+        // Show last page if not in range
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                paginationHTML += `<span class="pagination-ellipsis">...</span>`;
+            }
+            paginationHTML += `<button class="pagination-number" onclick="browseManager.goToPage(${totalPages})">${totalPages}</button>`;
         }
 
         paginationNumbers.innerHTML = paginationHTML;
@@ -758,10 +1440,10 @@ class BrowseManager {
     }
 
     goToPage(page) {
+        if (page < 1 || (this.totalPages && page > this.totalPages)) return;
         this.currentPage = page;
         this.searchBooks();
         window.scrollTo({ top: 0, behavior: 'smooth' });
-        this.showToast(`Navigated to page ${page}`, 'info');
     }
 
     previousPage() {
@@ -771,9 +1453,12 @@ class BrowseManager {
     }
 
     nextPage() {
-        this.currentPage++;
-        this.searchBooks();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        const maxPage = this.totalPages || Math.ceil((this.filteredBooks.length || 100) / this.booksPerPage) || 1;
+        if (this.currentPage < maxPage) {
+            this.currentPage++;
+            this.searchBooks();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }
 
     showLoading() {
@@ -896,7 +1581,7 @@ class BrowseManager {
 // Theme Manager Class
 class ThemeManager {
     constructor() {
-        this.currentTheme = localStorage.getItem('theme') || 'light';
+        this.currentTheme = localStorage.getItem('readwell_theme') || 'light';
         this.init();
     }
 
@@ -920,7 +1605,7 @@ class ThemeManager {
 
     applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('theme', theme);
+        localStorage.setItem('readwell_theme', theme);
         
         // Update toggle icon
         const themeToggle = document.getElementById('themeToggle');
@@ -935,6 +1620,127 @@ class ThemeManager {
         if (typeof browseManager !== 'undefined') {
             browseManager.showToast(message, 'info');
         }
+    }
+}
+
+// Authentication Functions
+async function handleLogin(event) {
+    event.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+        const response = await fetch('http://localhost:5000/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            localStorage.setItem('readwell_token', data.token);
+            browseManager.token = data.token;
+            browseManager.user = data.user;
+            browseManager.showToast('Login successful! Redirecting...', 'success');
+            closeModal('loginModal');
+            // Redirect to home page
+            setTimeout(() => {
+                window.location.href = 'home.html';
+            }, 1000);
+        } else {
+            browseManager.showToast(data.message || 'Login failed', 'error');
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        browseManager.showToast('Login failed. Please try again.', 'error');
+    }
+}
+
+async function handleSignup(event) {
+    event.preventDefault();
+    const username = document.getElementById('signupUsername').value;
+    const email = document.getElementById('signupEmail').value;
+    const password = document.getElementById('signupPassword').value;
+
+    try {
+        const response = await fetch('http://localhost:5000/api/auth/signup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            localStorage.setItem('readwell_token', data.token);
+            browseManager.token = data.token;
+            browseManager.user = data.user;
+            browseManager.showToast('Account created successfully! Redirecting...', 'success');
+            closeModal('signupModal');
+            // Redirect to home page
+            setTimeout(() => {
+                window.location.href = 'home.html';
+            }, 1000);
+        } else {
+            browseManager.showToast(data.message || 'Signup failed', 'error');
+        }
+    } catch (error) {
+        console.error('Signup error:', error);
+        browseManager.showToast('Signup failed. Please try again.', 'error');
+    }
+}
+
+function logout() {
+    localStorage.removeItem('readwell_token');
+    if (browseManager) {
+        browseManager.token = null;
+        browseManager.user = null;
+        browseManager.showToast('Logged out successfully', 'info');
+    }
+    // Redirect to dashboard
+    setTimeout(() => {
+        window.location.href = 'dashboard.html';
+    }, 1000);
+}
+
+function toggleUserDropdown() {
+    const dropdown = document.getElementById('userDropdown');
+    if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    const userMenu = document.getElementById('userMenuBtn');
+    const dropdown = document.getElementById('userDropdown');
+    
+    if (userMenu && dropdown && !userMenu.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+    }
+});
+
+function showLoginModal() {
+    document.getElementById('loginModal').style.display = 'block';
+}
+
+function showSignupModal() {
+    document.getElementById('signupModal').style.display = 'block';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
     }
 }
 
@@ -958,13 +1764,13 @@ function clearAllFilters() {
     });
     
     // Reset language and sort
-    document.getElementById('languageSelect').value = 'all';
+    document.getElementById('languageSelect').value = 'english';
     document.getElementById('sortSelect').value = 'relevance';
     
     browseManager.filters = {
         search: '',
         genre: 'all',
-        language: 'all',
+        language: 'english',
         sort: 'relevance'
     };
     
@@ -973,12 +1779,24 @@ function clearAllFilters() {
     browseManager.loadPopularBooks();
 }
 
-function addToFavorites(bookId, bookTitle = 'book') {
-    browseManager.toggleFavorite(bookId, bookTitle);
+async function addToFavorites(bookId, bookTitle = 'book') {
+    const book = browseManager.filteredBooks.find(b => b.id === bookId) || 
+                 browseManager.books.find(b => b.id === bookId);
+    if (book) {
+        await browseManager.toggleFavorite(bookId, bookTitle, book.author || 'Unknown', book.cover || '');
+    } else {
+        await browseManager.toggleFavorite(bookId, bookTitle);
+    }
 }
 
-function addToBookmark(bookId, bookTitle = 'book') {
-    browseManager.toggleBookmark(bookId, bookTitle);
+async function addToBookmark(bookId, bookTitle = 'book') {
+    const book = browseManager.filteredBooks.find(b => b.id === bookId) || 
+                 browseManager.books.find(b => b.id === bookId);
+    if (book) {
+        await browseManager.toggleBookmark(bookId, bookTitle, book.author || 'Unknown', book.cover || '');
+    } else {
+        await browseManager.toggleBookmark(bookId, bookTitle);
+    }
 }
 
 function readBook(bookId, title, author) {

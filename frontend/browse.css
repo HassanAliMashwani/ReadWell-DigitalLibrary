@@ -105,21 +105,42 @@
 
 /* Browse Content Layout */
 .browse-content {
-    display: grid;
-    grid-template-columns: 300px 1fr;
+    display: flex;
     gap: 2rem;
     margin-bottom: 3rem;
+    position: relative;
+    align-items: flex-start;
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0 15px;
 }
 
-/* Filters Sidebar */
+/* Filters Sidebar - Left Side */
 .filters-sidebar {
-    background: white;
+    background: var(--bg-secondary);
     padding: 1.5rem;
     border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    height: fit-content;
+    box-shadow: var(--shadow);
+    width: 300px;
+    flex-shrink: 0;
     position: sticky;
     top: 100px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+}
+
+.filters-sidebar.fixed-sidebar {
+    position: sticky;
+    top: 100px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+}
+
+/* Books Results - Middle to Right */
+.books-results {
+    flex: 1;
+    min-width: 0;
 }
 
 .filters-header {
@@ -324,36 +345,38 @@
     transition: all 0.3s ease;
 }
 
-/* Grid View */
-.books-container.grid-view {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1.5rem;
+/* List View Only - Grid View Removed */
+.books-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
-/* List View */
 .books-container.list-view {
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
 
-.books-container.list-view .book-card {
+.books-container .book-card {
     display: flex;
-    height: 200px;
+    min-height: 200px;
+    flex-direction: row;
 }
 
-.books-container.list-view .book-cover {
-    width: 120px;
-    height: 100%;
+.books-container .book-cover {
+    width: 150px;
+    min-width: 150px;
+    height: 200px;
     flex-shrink: 0;
 }
 
-.books-container.list-view .book-info {
+.books-container .book-info {
     flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
+    padding: 1.5rem;
 }
 
 /* Loading State */
@@ -402,9 +425,10 @@
         grid-template-columns: 1fr;
     }
     
-    .filters-sidebar {
+    .filters-sidebar.fixed-sidebar {
         position: static;
-        margin-bottom: 2rem;
+        height: auto;
+        width: 100%;
     }
 }
 
@@ -420,26 +444,18 @@
         justify-content: space-between;
     }
     
-    .books-container.grid-view {
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    }
-    
-    .books-container.list-view .book-card {
-        height: auto;
+    .books-container .book-card {
         flex-direction: column;
+        min-height: 0;
     }
     
-    .books-container.list-view .book-cover {
+    .books-container .book-cover {
         width: 100%;
-        height: 200px;
+        height: 250px;
     }
 }
 
 @media (max-width: 480px) {
-    .books-container.grid-view {
-        grid-template-columns: 1fr;
-    }
-    
     .range-inputs {
         flex-direction: column;
         align-items: stretch;
@@ -500,4 +516,94 @@
 .suggestion-item.see-all {
     background-color: var(--bg-primary);
     font-weight: 600;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: var(--bg-secondary);
+    margin: 5% auto;
+    padding: 2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: var(--shadow);
+}
+
+.close {
+    color: var(--text-secondary);
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover,
+.close:focus {
+    color: var(--text-primary);
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    font-size: 1rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: 2px solid #3498db;
+    border-color: #3498db;
+}
+
+.rating-star {
+    cursor: pointer;
+    color: #ddd;
+    transition: color 0.2s;
+}
+
+.rating-star.active {
+    color: #f39c12;
+}
+
+.rating-star:hover {
+    color: #f39c12;
+}
+
+.rating-count {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-left: 0.5rem;
+}
+
+.btn-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
 }

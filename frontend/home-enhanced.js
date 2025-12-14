@@ -61,9 +61,56 @@ class EnhancedHomeManager {
     }
 
     async loadPopularBooks() {
-        const response = await fetch(`${this.API_BASE}/openlibrary/popular`);
-        const books = await response.json();
-        this.renderBooksGrid(books, 'popular-books');
+        try {
+            // Get popular books from ratings API
+            const response = await fetch(`${this.API_BASE}/ratings/popular/week`);
+            const popularBooks = await response.json();
+            
+            if (popularBooks.length > 0) {
+                // Fetch book details for popular books
+                const booksWithDetails = await Promise.all(
+                    popularBooks.slice(0, 8).map(async (book) => {
+                        try {
+                            // Try to get book details from Open Library
+                            const bookResponse = await fetch(`${this.API_BASE}/openlibrary/book${book.bookId}`);
+                            if (bookResponse.ok) {
+                                const bookData = await bookResponse.json();
+                                return {
+                                    ...bookData,
+                                    averageRating: book.averageRating,
+                                    totalRatings: book.totalRatings
+                                };
+                            }
+                        } catch (error) {
+                            console.error('Error fetching book details:', error);
+                        }
+                        // Fallback to basic book info
+                        return {
+                            id: book.bookId,
+                            title: book.bookTitle,
+                            author: 'Unknown',
+                            cover: 'https://via.placeholder.com/200x300/3498db/ffffff?text=No+Cover',
+                            year: 'Unknown',
+                            description: 'Popular book this week',
+                            averageRating: book.averageRating,
+                            totalRatings: book.totalRatings
+                        };
+                    })
+                );
+                this.renderBooksGrid(booksWithDetails, 'popular-books');
+            } else {
+                // Fallback to Open Library popular if no ratings
+                const response = await fetch(`${this.API_BASE}/openlibrary/popular`);
+                const books = await response.json();
+                this.renderBooksGrid(books, 'popular-books');
+            }
+        } catch (error) {
+            console.error('Error loading popular books:', error);
+            // Fallback to Open Library popular
+            const response = await fetch(`${this.API_BASE}/openlibrary/popular`);
+            const books = await response.json();
+            this.renderBooksGrid(books, 'popular-books');
+        }
     }
 
     renderBooksGrid(books, containerId, showDescription = false) {
@@ -93,9 +140,10 @@ class EnhancedHomeManager {
                     <p class="author">${book.author}</p>
                     <div class="rating">
                         <div class="stars">
-                            ${this.renderStars(4.0)}
+                            ${this.renderStars(book.averageRating || 0)}
                         </div>
-                        <span class="rating-value">4.0</span>
+                        <span class="rating-value">${book.averageRating ? book.averageRating.toFixed(1) : 'No ratings'}</span>
+                        ${book.totalRatings ? `<span style="color: #7f8c8d; font-size: 0.9rem;">(${book.totalRatings})</span>` : ''}
                     </div>
                     ${showDescription && book.description ? `<p class="book-description">${book.description}</p>` : ''}
                 </div>

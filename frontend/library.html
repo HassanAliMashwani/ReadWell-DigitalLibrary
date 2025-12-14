@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Library - ReadWell</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="browse.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .library-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 20px;
+        }
+
+        .library-header {
+            margin-bottom: 2rem;
+        }
+
+        .library-header h1 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .library-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .library-tab {
+            padding: 1rem 2rem;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .library-tab.active {
+            color: #3498db;
+            border-bottom-color: #3498db;
+        }
+
+        .library-tab:hover {
+            color: var(--text-primary);
+        }
+
+        .library-content {
+            min-height: 400px;
+        }
+
+        .empty-library {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-library i {
+            font-size: 4rem;
+            color: var(--border-color);
+            margin-bottom: 1rem;
+        }
+
+        .empty-library h3 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .library-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .library-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-book-open"></i>
+                <span>ReadWell</span>
+            </div>
+            
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="home.html"><i class="fas fa-home"></i> Home</a></li>
+                    <li><a href="browse.html"><i class="fas fa-compass"></i> Browse</a></li>
+                    <li><a href="library.html" class="active"><i class="fas fa-bookmark"></i> My Library</a></li>
+                    <li><a href="profile.html" id="profileLink"><i class="fas fa-user"></i> Profile</a></li>
+                </ul>
+            </nav>
+
+            <div class="header-actions">
+                <div class="search-bar">
+                    <input type="text" placeholder="Search by title, author, or genre...">
+                    <button><i class="fas fa-search"></i></button>
+                </div>
+                <button class="btn-notification">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge">3</span>
+                </button>
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+
+                <!-- Auth Buttons -->
+                <div id="authButtons" style="display: none;">
+                    <button class="btn btn-primary" onclick="window.location.href='dashboard.html'">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                </div>
+                <div id="userMenu" style="display: none;">
+                    <span id="userName" style="color: #3498db !important; font-weight: 700; margin-right: 1rem; background: rgba(52, 152, 219, 0.15); padding: 0.3rem 0.6rem; border-radius: 15px;"></span>
+                    <button class="btn btn-secondary" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="library-container">
+            <div class="library-header">
+                <h1><i class="fas fa-bookmark"></i> My Library</h1>
+                <p style="color: var(--text-secondary);">Your saved books, favorites, and bookmarks</p>
+            </div>
+
+            <!-- Stats -->
+            <div class="library-stats">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalBooks">0</div>
+                    <div class="stat-label">Total Books</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="favoritesCount">0</div>
+                    <div class="stat-label">Favorites</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="bookmarksCount">0</div>
+                    <div class="stat-label">Bookmarks</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="library-tabs">
+                <button class="library-tab active" onclick="showLibraryTab('all')">
+                    <i class="fas fa-book"></i> All Books
+                </button>
+                <button class="library-tab" onclick="showLibraryTab('favorite')">
+                    <i class="fas fa-heart"></i> Favorites
+                </button>
+                <button class="library-tab" onclick="showLibraryTab('bookmark')">
+                    <i class="fas fa-bookmark"></i> Bookmarks
+                </button>
+            </div>
+
+            <!-- Library Content -->
+            <div class="library-content">
+                <div class="books-container list-view" id="libraryBooks">
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading your library...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="logo">
+                        <i class="fas fa-book-open"></i>
+                        <span>ReadWell</span>
+                    </div>
+                    <p>Your gateway to thousands of books. Discover, read, and enjoy literature from around the world.</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 ReadWell. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="auth.js"></script>
+    <script src="library.js"></script>
+</body>
+</html>
+

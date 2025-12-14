@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReadWell - Your Digital Library</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="browse.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-book-open"></i>
+                <span>ReadWell</span>
+            </div>
+            
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="home.html" class="active"><i class="fas fa-home"></i> Home</a></li>
+                    <li><a href="browse.html"><i class="fas fa-compass"></i> Browse</a></li>                    
+                    <li><a href="library.html" id="myLibraryLink"><i class="fas fa-bookmark"></i> My Library</a></li>
+                    <li><a href="profile.html" id="profileLink"><i class="fas fa-user"></i> Profile</a></li>
+                </ul>
+            </nav>
+
+            <div class="header-actions">
+                <div class="search-bar">
+                    <input type="text" placeholder="Search by title, author, or genre...">
+                    <button><i class="fas fa-search"></i></button>
+                </div>
+                <button class="btn-notification">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge">3</span>
+                </button>
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+
+                <!-- User Menu -->
+                <div id="userMenu" style="display: none;">
+                    <span id="userName" style="color: #3498db !important; font-weight: 700; margin-right: 1rem; background: rgba(52, 152, 219, 0.15); padding: 0.3rem 0.6rem; border-radius: 15px;"></span>
+                    <button class="btn btn-secondary" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Hero Section -->
+            <section class="hero">
+                <div class="hero-content">
+                    <h1>Discover Your Next Favorite Book</h1>
+                    <p>Explore thousands of books across all genres. From classic literature to modern bestsellers.</p>
+                    <div class="hero-actions">
+                        <button class="btn btn-primary" onclick="window.location.href='browse.html'">
+                            <i class="fas fa-rocket"></i>
+                            Start Reading
+                        </button>
+                        <button class="btn btn-secondary">
+                            <i class="fas fa-play-circle"></i>
+                            See Demo
+                        </button>
+                    </div>
+                </div>
+                <div class="hero-image">
+                    <div class="book-stack">
+                        <div class="book book-1"></div>
+                        <div class="book book-2"></div>
+                        <div class="book book-3"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Featured Books Section -->
+            <section class="featured-section">
+                <div class="section-header">
+                    <h2>Featured Books</h2>
+                    <a href="browse.html" class="view-all">View All <i class="fas fa-arrow-right"></i></a>
+                </div>
+                
+                <div class="books-grid" id="featured-books">
+                    <!-- Books will be loaded dynamically from API -->
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading featured books...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Categories Section -->
+            <section class="categories-section">
+                <div class="section-header">
+                    <h2>Browse by Genre</h2>
+                    <a href="browse.html" class="view-all">All Genres <i class="fas fa-arrow-right"></i></a>
+                </div>
+                
+                <div class="categories-grid">
+                    <div class="category-card" onclick="window.location.href='browse.html?genre=fiction'">
+                        <i class="fas fa-book"></i>
+                        <h3>Fiction</h3>
+                        <p>Classic and contemporary stories</p>
+                    </div>
+                    <div class="category-card" onclick="window.location.href='browse.html?genre=scifi'">
+                        <i class="fas fa-rocket"></i>
+                        <h3>Science Fiction</h3>
+                        <p>Futuristic worlds and technology</p>
+                    </div>
+                    <div class="category-card" onclick="window.location.href='browse.html?genre=fantasy'">
+                        <i class="fas fa-magic"></i>
+                        <h3>Fantasy</h3>
+                        <p>Magical realms and adventures</p>
+                    </div>
+                    <div class="category-card" onclick="window.location.href='browse.html?genre=mystery'">
+                        <i class="fas fa-search"></i>
+                        <h3>Mystery</h3>
+                        <p>Thrilling puzzles and suspense</p>
+                    </div>
+                    <div class="category-card" onclick="window.location.href='browse.html?genre=romance'">
+                        <i class="fas fa-heart"></i>
+                        <h3>Romance</h3>
+                        <p>Love stories and relationships</p>
+                    </div>
+                    <div class="category-card" onclick="window.location.href='browse.html?genre=biography'">
+                        <i class="fas fa-user"></i>
+                        <h3>Biography</h3>
+                        <p>Inspiring real-life stories</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Books Section -->
+            <section class="recent-section">
+                <div class="section-header">
+                    <h2>Recently Added</h2>
+                    <a href="browse.html" class="view-all">View All <i class="fas fa-arrow-right"></i></a>
+                </div>
+                
+                <div class="books-grid" id="recent-books">
+                    <!-- Books will be loaded dynamically from API -->
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading recent books...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Popular Books Section -->
+            <section class="more-books-section">
+                <div class="section-header">
+                    <h2>Popular This Week</h2>
+                    <a href="browse.html" class="view-all">View All <i class="fas fa-arrow-right"></i></a>
+                </div>
+                
+                <div class="books-grid" id="popular-books">
+                    <!-- Books will be loaded dynamically from API -->
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading popular books...</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="logo">
+                        <i class="fas fa-book-open"></i>
+                        <span>ReadWell</span>
+                    </div>
+                    <p>Your gateway to thousands of books. Discover, read, and enjoy literature from around the world.</p>
+                    <div class="social-links">
+                        <a href="#" title="Facebook"><i class="fab fa-facebook"></i></a>
+                        <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="#" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="#" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+                    </div>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="home.html">Home</a></li>
+                        <li><a href="browse.html">Browse</a></li>
+                        <li><a href="profile.html">Profile</a></li>
+                        <li><a href="dashboard.html">Dashboard</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Categories</h4>
+                    <ul>
+                        <li><a href="browse.html?genre=fiction">Fiction</a></li>
+                        <li><a href="browse.html?genre=scifi">Science Fiction</a></li>
+                        <li><a href="browse.html?genre=fantasy">Fantasy</a></li>
+                        <li><a href="browse.html?genre=biography">Biography</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Support</h4>
+                    <ul>
+                        <li><a href="#">Help Center</a></li>
+                        <li><a href="#">Contact Us</a></li>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2024 ReadWell. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="home-enhanced.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        // Check auth and redirect if not logged in
+        document.addEventListener('DOMContentLoaded', async () => {
+            const token = localStorage.getItem('readwell_token');
+            if (!token) {
+                window.location.href = 'dashboard.html';
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/verify', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const userName = document.getElementById('userName');
+                    const userMenu = document.getElementById('userMenu');
+                    const profileLink = document.getElementById('profileLink');
+                    if (userName) userName.textContent = data.user.username;
+                    if (userMenu) userMenu.style.display = 'flex';
+                    if (profileLink) profileLink.style.display = 'block';
+                } else {
+                    window.location.href = 'dashboard.html';
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                window.location.href = 'dashboard.html';
+            }
+        });
+        
+        function logout() {
+            localStorage.removeItem('readwell_token');
+            showToast('Logged out successfully', 'info');
+            setTimeout(() => {
+                window.location.href = 'dashboard.html';
+            }, 1000);
+        }
+        
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: ${type === 'success' ? '#2ecc71' : type === 'error' ? '#e74c3c' : '#3498db'};
+                color: white;
+                padding: 12px 24px;
+                border-radius: 25px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+    </script>
+</body>
+</html>
+
