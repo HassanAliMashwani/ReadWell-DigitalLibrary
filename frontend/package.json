@@ -1,0 +1,17 @@
+{
+  "name": "readwell-frontend",
+  "version": "1.0.0",
+  "description": "ReadWell Digital Library Frontend",
+  "scripts": {
+    "start": "npx http-server -p 8000 -c-1",
+    "dev": "npx http-server -p 8000 -c-1"
+  },
+  "keywords": [
+    "readwell",
+    "digital-library",
+    "frontend"
+  ],
+  "author": "",
+  "license": "ISC"
+}
+

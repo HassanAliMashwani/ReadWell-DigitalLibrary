@@ -1,18 +1,36 @@
     // My Library Page Functionality
-const API_BASE = 'http://localhost:5000/api';
-let authToken = localStorage.getItem('readwell_token');
+// API_BASE and authToken are declared in auth.js which is loaded first - use them
+// Fallback if API_BASE is not available
+if (typeof API_BASE === 'undefined') {
+    window.API_BASE = 'http://localhost:5000/api';
+}
+const API_BASE = window.API_BASE || 'http://localhost:5000/api';
+
+// Use authToken from auth.js if available (don't redeclare), otherwise get from localStorage
+if (typeof authToken === 'undefined') {
+    var authToken = localStorage.getItem('readwell_token');
+}
 let currentUser = null;
 let currentTab = 'all';
 let allLibraryBooks = [];
 
 // Check authentication
 async function initLibrary() {
+    console.log('initLibrary called');
+    
+    // Get fresh token if needed
     if (!authToken) {
+        authToken = localStorage.getItem('readwell_token');
+    }
+    
+    if (!authToken) {
+        console.log('No auth token found, redirecting to dashboard');
         window.location.href = 'dashboard.html';
         return;
     }
 
     try {
+        console.log('Verifying auth token...');
         const response = await fetch(`${API_BASE}/auth/verify`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`
@@ -22,9 +40,12 @@ async function initLibrary() {
         if (response.ok) {
             const data = await response.json();
             currentUser = data.user;
+            console.log('Auth verified, user:', currentUser.username);
             updateAuthUI();
+            console.log('Loading library...');
             await loadLibrary();
         } else {
+            console.error('Auth verification failed:', response.status);
             window.location.href = 'dashboard.html';
         }
     } catch (error) {
@@ -55,29 +76,65 @@ function updateAuthUI() {
 }
 
 async function loadLibrary() {
-    const container = document.getElementById('libraryBooks');
-    if (container) {
-        container.innerHTML = `
-            <div class="loading-state">
-                <div class="loading-spinner"></div>
-                <p>Loading your library...</p>
-            </div>
-        `;
+    console.log('loadLibrary function called');
+    
+    // Get fresh token if needed
+    if (!authToken) {
+        authToken = localStorage.getItem('readwell_token');
     }
     
+    const container = document.getElementById('libraryBooks');
+    if (!container) {
+        console.error('Container #libraryBooks not found!');
+        return;
+    }
+    
+    container.innerHTML = `
+        <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>Loading your library...</p>
+        </div>
+    `;
+    
     try {
+        console.log('Loading library with token:', authToken ? 'Token exists' : 'No token');
+        console.log('API_BASE:', API_BASE);
+        console.log('Fetching from:', `${API_BASE}/library`);
+        
         const response = await fetch(`${API_BASE}/library`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`
             }
         });
 
+        console.log('Library API response status:', response.status);
+
         if (response.ok) {
-            allLibraryBooks = await response.json();
+            const data = await response.json();
+            console.log('Library data received:', data);
+            console.log('Library data type:', Array.isArray(data) ? 'Array' : typeof data);
+            console.log('Library data length:', Array.isArray(data) ? data.length : 'Not an array');
+            
+            allLibraryBooks = Array.isArray(data) ? data : [];
+            console.log('All library books set to:', allLibraryBooks.length);
+            console.log('Library books data:', allLibraryBooks);
+            
+            if (allLibraryBooks.length > 0) {
+                console.log('First book:', allLibraryBooks[0]);
+            }
+            
             updateStats();
+            console.log('Calling showLibraryTab with currentTab:', currentTab);
             showLibraryTab(currentTab);
         } else {
-            const errorData = await response.json().catch(() => ({ message: 'Failed to load library' }));
+            const errorText = await response.text();
+            console.error('Library API error:', response.status, errorText);
+            let errorData = { message: 'Failed to load library' };
+            try {
+                errorData = JSON.parse(errorText);
+            } catch (e) {
+                errorData = { message: errorText || 'Failed to load library' };
+            }
             showError(errorData.message || 'Failed to load library');
             if (container) {
                 container.innerHTML = `
@@ -85,6 +142,10 @@ async function loadLibrary() {
                         <i class="fas fa-exclamation-triangle"></i>
                         <h3>Error loading library</h3>
                         <p>${errorData.message || 'Please try again later'}</p>
+                        <p style="font-size: 0.8rem; margin-top: 0.5rem;">Status: ${response.status}</p>
+                        <button class="btn btn-primary" onclick="loadLibrary()" style="margin-top: 1rem;">
+                            <i class="fas fa-redo"></i> Retry
+                        </button>
                     </div>
                 `;
             }
@@ -98,6 +159,7 @@ async function loadLibrary() {
                     <i class="fas fa-exclamation-triangle"></i>
                     <h3>Connection Error</h3>
                     <p>Unable to connect to server. Please check your internet connection.</p>
+                    <p style="font-size: 0.8rem; margin-top: 0.5rem;">Error: ${error.message}</p>
                     <button class="btn btn-primary" onclick="loadLibrary()" style="margin-top: 1rem;">
                         <i class="fas fa-redo"></i> Retry
                     </button>
@@ -117,32 +179,60 @@ function updateStats() {
     document.getElementById('bookmarksCount').textContent = bookmarks;
 }
 
-function showLibraryTab(tab) {
+// Make function globally accessible
+window.showLibraryTab = function(tab) {
+    console.log('showLibraryTab called with tab:', tab);
+    console.log('allLibraryBooks length:', allLibraryBooks ? allLibraryBooks.length : 0);
+    
     currentTab = tab;
     
     // Update tab buttons
-    document.querySelectorAll('.library-tab').forEach(btn => {
+    const tabButtons = document.querySelectorAll('.library-tab');
+    console.log('Found tab buttons:', tabButtons.length);
+    
+    tabButtons.forEach(btn => {
         btn.classList.remove('active');
+        const btnText = btn.textContent.toLowerCase();
+        if ((tab === 'all' && btnText.includes('all')) ||
+            (tab === 'favorite' && (btnText.includes('like') || btnText.includes('favorite'))) ||
+            (tab === 'bookmark' && btnText.includes('bookmark'))) {
+            btn.classList.add('active');
+            console.log('Activated tab button:', btnText);
+        }
     });
-    event?.target?.classList.add('active');
     
     // Filter books by tab
-    let filteredBooks = allLibraryBooks;
+    let filteredBooks = allLibraryBooks || [];
+    console.log('Before filtering - allLibraryBooks:', allLibraryBooks);
+    
     if (tab === 'favorite') {
         filteredBooks = allLibraryBooks.filter(b => b.type === 'favorite');
+        console.log('Filtered for favorite:', filteredBooks);
     } else if (tab === 'bookmark') {
         filteredBooks = allLibraryBooks.filter(b => b.type === 'bookmark');
+        console.log('Filtered for bookmark:', filteredBooks);
     }
+    // For 'all', show all books (no filter)
     
+    console.log('Showing tab:', tab, 'Books:', filteredBooks.length, 'Total:', allLibraryBooks.length);
+    console.log('Filtered books:', filteredBooks);
     displayLibraryBooks(filteredBooks);
-}
+};
 
 function displayLibraryBooks(books) {
     const container = document.getElementById('libraryBooks');
     
-    if (books.length === 0) {
-        const tabName = currentTab === 'favorite' ? 'favorites' : 
-                       currentTab === 'bookmark' ? 'bookmarks' : 'books';
+    if (!container) {
+        console.error('Container #libraryBooks not found');
+        return;
+    }
+    
+    console.log('displayLibraryBooks called with:', books ? books.length : 0, 'books');
+    console.log('Books data:', books);
+    
+    if (!books || !Array.isArray(books) || books.length === 0) {
+        const tabName = currentTab === 'favorite' ? 'liked' : 
+                       currentTab === 'bookmark' ? 'bookmarked' : 'books';
         container.innerHTML = `
             <div class="empty-library">
                 <i class="fas fa-book"></i>
@@ -156,49 +246,55 @@ function displayLibraryBooks(books) {
         return;
     }
     
-    container.innerHTML = books.map(book => `
-        <div class="book-card" tabindex="0">
-            <div class="book-cover">
-                <img src="${book.bookCover || 'https://via.placeholder.com/200x300/3498db/ffffff?text=No+Cover'}" 
-                     alt="${book.bookTitle} Cover" 
-                     onerror="this.src='https://via.placeholder.com/200x300/3498db/ffffff?text=No+Cover'"
-                     loading="lazy">
-                <div class="book-overlay">
-                    <button class="btn-read" onclick="readBook('${book.bookId}', '${book.bookTitle.replace(/'/g, "\\'")}', '${book.bookAuthor.replace(/'/g, "\\'")}')">
-                        Read Now
-                    </button>
-                </div>
-            </div>
-            <div class="book-info">
-                <h3>${book.bookTitle}</h3>
-                <p class="author">${book.bookAuthor || 'Unknown Author'}</p>
-                <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button class="btn btn-primary btn-small" onclick="viewBookProgress('${book.bookId}', '${book.bookTitle.replace(/'/g, "\\'")}')">
-                        <i class="fas fa-book-open"></i> Reading Progress
-                    </button>
-                    <button class="btn btn-secondary btn-small" onclick="removeFromLibrary('${book.bookId}', '${book.type}')">
-                        <i class="fas fa-trash"></i> Remove
-                    </button>
-                    ${book.type === 'favorite' ? `
-                    <span class="badge" style="background: #e74c3c; color: white; padding: 0.25rem 0.75rem; border-radius: 15px; font-size: 0.85rem;">
-                        <i class="fas fa-heart"></i> Favorite
+    try {
+        const html = books.map(book => {
+            const safeTitle = (book.bookTitle || 'Unknown Book').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const safeBookId = (book.bookId || '').replace(/'/g, "\\'");
+            const bookType = book.type || 'saved';
+            
+            console.log('Rendering book:', safeTitle, 'Type:', bookType);
+            
+            return `
+                <div class="book-card" tabindex="0" style="display: flex; align-items: center; padding: 1rem; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 0.5rem; background: var(--bg-secondary);">
+                    <h3 style="flex: 1; margin: 0; color: var(--text-primary); font-size: 1.1rem; cursor: pointer;" onclick="viewBookProgress('${safeBookId}', '${safeTitle}')">
+                        ${book.bookTitle || 'Unknown Book'}
+                    </h3>
+                    ${bookType === 'favorite' ? `
+                    <span class="badge" style="background: #e74c3c; color: white; padding: 0.25rem 0.75rem; border-radius: 15px; font-size: 0.85rem; margin-right: 0.5rem;">
+                        <i class="fas fa-heart"></i> Like
                     </span>
                     ` : ''}
-                    ${book.type === 'bookmark' ? `
-                    <span class="badge" style="background: #3498db; color: white; padding: 0.25rem 0.75rem; border-radius: 15px; font-size: 0.85rem;">
-                        <i class="fas fa-bookmark"></i> Bookmarked
+                    ${bookType === 'bookmark' ? `
+                    <span class="badge" style="background: #3498db; color: white; padding: 0.25rem 0.75rem; border-radius: 15px; font-size: 0.85rem; margin-right: 0.5rem;">
+                        <i class="fas fa-bookmark"></i> Bookmark
                     </span>
                     ` : ''}
+                    <button class="btn btn-secondary btn-small" onclick="removeFromLibrary('${safeBookId}', '${bookType}')" style="margin-left: 0.5rem;">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
-                <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
-                    Added: ${new Date(book.addedAt).toLocaleDateString()}
-                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = html;
+        console.log('Library books displayed successfully. Rendered', books.length, 'books');
+    } catch (error) {
+        console.error('Error rendering library books:', error);
+        container.innerHTML = `
+            <div class="empty-library">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Error displaying books</h3>
+                <p>${error.message}</p>
+                <button class="btn btn-primary" onclick="loadLibrary()" style="margin-top: 1rem;">
+                    <i class="fas fa-redo"></i> Retry
+                </button>
             </div>
-        </div>
-    `).join('');
+        `;
+    }
 }
 
-async function removeFromLibrary(bookId, type) {
+// Make function globally accessible
+window.removeFromLibrary = async function(bookId, type) {
     if (!confirm('Are you sure you want to remove this book from your library?')) {
         return;
     }
@@ -221,7 +317,7 @@ async function removeFromLibrary(bookId, type) {
         console.error('Error removing book:', error);
         showToast('Failed to remove book', 'error');
     }
-}
+};
 
 function viewBookProgress(bookId, bookTitle) {
     window.location.href = `browse.html?book=${bookId}&action=progress`;

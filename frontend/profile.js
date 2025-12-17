@@ -1,6 +1,15 @@
 // Profile Page Functionality
-const API_BASE = 'http://localhost:5000/api';
-let authToken = localStorage.getItem('readwell_token');
+// API_BASE and authToken are declared in auth.js which is loaded first - use them
+// Fallback if API_BASE is not available
+if (typeof API_BASE === 'undefined') {
+    window.API_BASE = 'http://localhost:5000/api';
+}
+const API_BASE = window.API_BASE || 'http://localhost:5000/api';
+
+// Use authToken from auth.js if available (don't redeclare), otherwise get from localStorage
+if (typeof authToken === 'undefined') {
+    var authToken = localStorage.getItem('readwell_token');
+}
 let currentUser = null;
 
 // Check authentication and load profile data
@@ -56,81 +65,128 @@ function updateProfileHeader() {
 
 async function loadProfileData() {
     await Promise.all([
-        loadReadingProgress(),
-        loadQuotes(),
+        loadBooksWithProgress(),
         loadStats()
     ]);
 }
 
-async function loadReadingProgress() {
+async function loadBooksWithProgress() {
     try {
+        console.log('Loading books with progress, token:', authToken ? 'Token exists' : 'No token');
         const response = await fetch(`${API_BASE}/reading-progress`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`
             }
         });
 
+        console.log('Reading progress API response status:', response.status);
+
         if (response.ok) {
             const progressList = await response.json();
-            displayReadingProgress(progressList);
+            console.log('Reading progress received:', progressList);
+            console.log('Progress list type:', Array.isArray(progressList) ? 'Array' : typeof progressList);
+            console.log('Progress list length:', Array.isArray(progressList) ? progressList.length : 'Not an array');
+            
+            // Ensure it's an array
+            if (Array.isArray(progressList)) {
+                console.log('Displaying', progressList.length, 'books with progress');
+                displayBooksWithProgress(progressList);
+            } else {
+                console.error('Expected array but got:', typeof progressList, progressList);
+                displayBooksWithProgress([]);
+            }
         } else {
-            console.error('Failed to load reading progress:', response.statusText);
-            displayReadingProgress([]);
+            const errorText = await response.text();
+            console.error('Failed to load reading progress:', response.status, errorText);
+            const container = document.getElementById('booksWithProgress');
+            if (container) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Error loading reading progress</p>
+                        <p style="font-size: 0.8rem; margin-top: 0.5rem;">Status: ${response.status}</p>
+                        <button class="btn btn-primary" onclick="location.reload()" style="margin-top: 1rem;">Reload Page</button>
+                    </div>
+                `;
+            }
         }
     } catch (error) {
         console.error('Error loading reading progress:', error);
-        displayReadingProgress([]);
+        const container = document.getElementById('booksWithProgress');
+        if (container) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error loading reading progress</p>
+                    <p style="font-size: 0.8rem; margin-top: 0.5rem;">Error: ${error.message}</p>
+                    <button class="btn btn-primary" onclick="location.reload()" style="margin-top: 1rem;">Reload Page</button>
+                </div>
+            `;
+        }
     }
 }
 
-function displayReadingProgress(progressList) {
-    const container = document.getElementById('currentlyReading');
+function displayBooksWithProgress(progressList) {
+    const container = document.getElementById('booksWithProgress');
     
-    if (!progressList || progressList.length === 0) {
+    if (!container) {
+        console.error('Container element #booksWithProgress not found');
+        return;
+    }
+    
+    console.log('Displaying books with progress:', progressList);
+    
+    if (!progressList || !Array.isArray(progressList) || progressList.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
                 <i class="fas fa-book"></i>
-                <p>No books in progress</p>
+                <p>No reading progress saved yet</p>
                 <a href="browse.html" class="btn btn-primary" style="margin-top: 1rem;">Browse Books</a>
             </div>
         `;
         return;
     }
 
-    container.innerHTML = progressList.map(progress => `
-        <div class="reading-book-item">
-            <h3>${progress.bookTitle}</h3>
-            <div class="progress-info">
-                <div class="progress-info-item">
-                    <i class="fas fa-book"></i>
-                    <span>Chapter ${progress.chapter}</span>
+    try {
+        console.log('Rendering', progressList.length, 'books with progress');
+        const html = progressList.map(progress => {
+            // Escape special characters in bookTitle for onclick
+            const escapedTitle = (progress.bookTitle || 'Unknown Book')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '&quot;')
+                .replace(/\n/g, ' ')
+                .replace(/\r/g, '');
+            
+            const bookId = (progress.bookId || '').replace(/'/g, "\\'");
+            const quotesCount = progress.quotes && Array.isArray(progress.quotes) ? progress.quotes.length : 0;
+            
+            console.log('Rendering book:', progress.bookTitle, 'ID:', bookId, 'Quotes:', quotesCount);
+            
+            return `
+                <div class="reading-book-item" style="cursor: pointer; padding: 1rem; margin-bottom: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; transition: background-color 0.2s; background: var(--bg-secondary);" 
+                     onmouseover="this.style.backgroundColor='var(--bg-primary)'" 
+                     onmouseout="this.style.backgroundColor='var(--bg-secondary)'"
+                     onclick="viewBookProgressDetails('${bookId}', '${escapedTitle}')">
+                    <h3 style="color: #3498db; margin: 0; font-size: 1.1rem;">
+                        ${progress.bookTitle || 'Unknown Book'}
+                        ${quotesCount > 0 ? `<span style="color: var(--text-secondary); font-size: 0.9rem; margin-left: 0.5rem;">(${quotesCount} quote${quotesCount > 1 ? 's' : ''})</span>` : ''}
+                    </h3>
                 </div>
-                <div class="progress-info-item">
-                    <i class="fas fa-file-alt"></i>
-                    <span>Page ${progress.page}</span>
-                </div>
-                <div class="progress-info-item">
-                    <i class="fas fa-paragraph"></i>
-                    <span>Paragraph ${progress.paragraph}</span>
-                </div>
-                <div class="progress-info-item">
-                    <i class="fas fa-align-left"></i>
-                    <span>Line ${progress.lineNumber}</span>
-                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = html;
+        console.log('Books with progress displayed successfully. HTML length:', html.length);
+    } catch (error) {
+        console.error('Error rendering books with progress:', error);
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Error loading reading progress</p>
+                <button class="btn btn-primary" onclick="location.reload()" style="margin-top: 1rem;">Reload Page</button>
             </div>
-            <div style="margin-top: 1rem;">
-                <button class="btn btn-primary btn-small" onclick="editProgress('${progress.bookId}', '${progress.bookTitle.replace(/'/g, "\\'")}')">
-                    <i class="fas fa-edit"></i> Edit Progress
-                </button>
-                <button class="btn btn-secondary btn-small" onclick="viewQuotes('${progress.bookId}', '${progress.bookTitle.replace(/'/g, "\\'")}')">
-                    <i class="fas fa-quote-left"></i> View Quotes
-                </button>
-            </div>
-            <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
-                Last read: ${progress.updatedAt ? new Date(progress.updatedAt).toLocaleDateString() : (progress.lastReadAt ? new Date(progress.lastReadAt).toLocaleDateString() : 'Recently')}
-            </div>
-        </div>
-    `).join('');
+        `;
+    }
 }
 
 async function loadQuotes() {
@@ -202,6 +258,7 @@ function displayQuotes(quotes) {
 
 async function loadStats() {
     try {
+        console.log('Loading stats...');
         const progressResponse = await fetch(`${API_BASE}/reading-progress`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`
@@ -213,13 +270,18 @@ async function loadStats() {
 
         if (progressResponse.ok) {
             const progressList = await progressResponse.json();
-            booksReading = progressList.length;
+            console.log('Progress list for stats:', progressList);
+            booksReading = Array.isArray(progressList) ? progressList.length : 0;
             
-            progressList.forEach(progress => {
-                if (progress.quotes) {
-                    quotesSaved += progress.quotes.length;
-                }
-            });
+            if (Array.isArray(progressList)) {
+                progressList.forEach(progress => {
+                    if (progress.quotes && Array.isArray(progress.quotes)) {
+                        quotesSaved += progress.quotes.length;
+                    }
+                });
+            }
+        } else {
+            console.error('Failed to load progress for stats:', progressResponse.status);
         }
 
         // Get ratings count
@@ -232,15 +294,21 @@ async function loadStats() {
             });
             if (ratingsResponse.ok) {
                 const ratings = await ratingsResponse.json();
-                booksRated = ratings.length;
+                booksRated = Array.isArray(ratings) ? ratings.length : 0;
             }
         } catch (error) {
             console.error('Error loading ratings:', error);
         }
 
-        document.getElementById('booksReading').textContent = booksReading;
-        document.getElementById('quotesSaved').textContent = quotesSaved;
-        document.getElementById('booksRated').textContent = booksRated;
+        console.log('Stats:', { booksReading, quotesSaved, booksRated });
+        
+        const booksReadingEl = document.getElementById('booksReading');
+        const quotesSavedEl = document.getElementById('quotesSaved');
+        const booksRatedEl = document.getElementById('booksRated');
+        
+        if (booksReadingEl) booksReadingEl.textContent = booksReading;
+        if (quotesSavedEl) quotesSavedEl.textContent = quotesSaved;
+        if (booksRatedEl) booksRatedEl.textContent = booksRated;
     } catch (error) {
         console.error('Error loading stats:', error);
     }
@@ -254,6 +322,98 @@ function editProgress(bookId, bookTitle) {
 function viewQuotes(bookId, bookTitle) {
     // Show quotes modal
     window.location.href = `browse.html?book=${bookId}&action=quotes`;
+}
+
+async function viewBookProgressDetails(bookId, bookTitle) {
+    try {
+        const response = await fetch(`${API_BASE}/reading-progress/${encodeURIComponent(bookId)}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            const progress = await response.json();
+            showProgressDetailsModal(progress, bookTitle);
+        } else {
+            showToast('Failed to load progress details', 'error');
+        }
+    } catch (error) {
+        console.error('Error loading progress:', error);
+        showToast('Failed to load progress details', 'error');
+    }
+}
+
+function showProgressDetailsModal(progress, bookTitle) {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    };
+    
+    const safeTitle = bookTitle.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+            <h2>${safeTitle}</h2>
+            <div style="margin-top: 1.5rem;">
+                <h3 style="margin-bottom: 1rem;"><i class="fas fa-book-open"></i> Reading Progress</h3>
+                <div class="progress-info" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div class="progress-info-item">
+                        <i class="fas fa-book"></i>
+                        <span><strong>Chapter:</strong> ${progress.chapter !== null && progress.chapter !== undefined ? progress.chapter : 'N/A'}</span>
+                    </div>
+                    <div class="progress-info-item">
+                        <i class="fas fa-file-alt"></i>
+                        <span><strong>Page:</strong> ${progress.page !== null && progress.page !== undefined ? progress.page : 'N/A'}</span>
+                    </div>
+                    <div class="progress-info-item">
+                        <i class="fas fa-paragraph"></i>
+                        <span><strong>Paragraph:</strong> ${progress.paragraph !== null && progress.paragraph !== undefined ? progress.paragraph : 'N/A'}</span>
+                    </div>
+                    <div class="progress-info-item">
+                        <i class="fas fa-align-left"></i>
+                        <span><strong>Line:</strong> ${progress.lineNumber !== null && progress.lineNumber !== undefined ? progress.lineNumber : 'N/A'}</span>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                        <strong>Last Updated:</strong> ${progress.lastReadAt ? new Date(progress.lastReadAt).toLocaleString() : (progress.updatedAt ? new Date(progress.updatedAt).toLocaleString() : 'Recently')}
+                    </p>
+                </div>
+                ${progress.quotes && progress.quotes.length > 0 ? `
+                    <div style="margin-top: 2rem; padding-top: 1rem; border-top: 2px solid var(--border-color);">
+                        <h3 style="margin-bottom: 1rem;"><i class="fas fa-quote-left"></i> Saved Quotes (${progress.quotes.length})</h3>
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            ${progress.quotes.map((quote, idx) => `
+                                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 3px solid #3498db;">
+                                    <p style="font-style: italic; color: var(--text-primary); margin-bottom: 0.5rem; font-size: 1.05rem; line-height: 1.6;">"${quote.text}"</p>
+                                    <p style="font-size: 0.85rem; color: var(--text-secondary);">
+                                        ${quote.chapter ? `Chapter ${quote.chapter}` : ''}${quote.chapter && quote.page ? ', ' : ''}${quote.page ? `Page ${quote.page}` : ''}
+                                    </p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : `
+                    <div style="margin-top: 2rem; padding-top: 1rem; border-top: 2px solid var(--border-color);">
+                        <h3 style="margin-bottom: 1rem;"><i class="fas fa-quote-left"></i> Saved Quotes</h3>
+                        <p style="color: var(--text-secondary);">No quotes saved for this book yet.</p>
+                    </div>
+                `}
+                <div style="margin-top: 1.5rem;">
+                    <button class="btn btn-primary" onclick="editProgress('${progress.bookId}', '${safeTitle}')">
+                        <i class="fas fa-edit"></i> Edit Progress
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 }
 
 async function deleteQuote(bookId, quoteId) {

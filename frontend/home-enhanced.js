@@ -117,20 +117,29 @@ class EnhancedHomeManager {
         const container = document.getElementById(containerId);
         if (!container || !books) return;
 
-        container.innerHTML = books.map(book => `
+        const token = localStorage.getItem('readwell_token');
+        const user = token ? true : false;
+
+        container.innerHTML = books.map(book => {
+            const safeTitle = book.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const safeAuthor = (book.author || 'Unknown').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            
+            return `
             <div class="book-card" tabindex="0" role="button" aria-label="${book.title} by ${book.author}">
                 <div class="book-cover">
                     <img src="${book.cover}" alt="${book.title} Cover" 
                          onerror="this.src='https://via.placeholder.com/200x300/3498db/ffffff?text=No+Cover'"
                          loading="lazy">
                     <div class="book-overlay">
-                        <button class="btn-icon" aria-label="Add to favorites" onclick="addToFavorites('${book.id}')">
-                            <i class="fas fa-heart"></i>
+                        ${user ? `
+                        <button class="btn-icon" aria-label="Add to favorites" onclick="homeToggleFavorite('${book.id}', '${safeTitle}', '${safeAuthor}', '${book.cover || ''}')">
+                            <i class="far fa-heart" id="home-heart-${book.id}"></i>
                         </button>
-                        <button class="btn-icon" aria-label="Bookmark" onclick="addToBookmark('${book.id}')">
-                            <i class="fas fa-bookmark"></i>
+                        <button class="btn-icon" aria-label="Bookmark" onclick="homeToggleBookmark('${book.id}', '${safeTitle}', '${safeAuthor}', '${book.cover || ''}')">
+                            <i class="far fa-bookmark" id="home-bookmark-${book.id}"></i>
                         </button>
-                        <button class="btn-read" onclick="readBook('${book.id}', '${book.title}', '${book.author}')">
+                        ` : ''}
+                        <button class="btn-read" onclick="readBook('${book.id}', '${safeTitle}', '${safeAuthor}')">
                             Read Now
                         </button>
                     </div>
@@ -148,7 +157,8 @@ class EnhancedHomeManager {
                     ${showDescription && book.description ? `<p class="book-description">${book.description}</p>` : ''}
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     setupEnhancedInteractions() {
@@ -216,13 +226,154 @@ class EnhancedHomeManager {
 }
 
 // Enhanced global functions with HCI improvements
-function addToFavorites(bookId) {
-    showToast('Added to favorites!', 'success');
-    // HCI: Provide immediate feedback
+async function homeToggleFavorite(bookId, bookTitle, bookAuthor, bookCover) {
+    const token = localStorage.getItem('readwell_token');
+    if (!token) {
+        showToast('Please login to save favorites', 'error');
+        window.location.href = 'dashboard.html';
+        return;
+    }
+
+    const API_BASE = 'http://localhost:5000/api';
+    
+    try {
+        // Check if already favorited
+        const checkResponse = await fetch(`${API_BASE}/library/check/${encodeURIComponent(bookId)}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        let isFavorited = false;
+        if (checkResponse.ok) {
+            const data = await checkResponse.json();
+            isFavorited = data.type === 'favorite';
+        }
+        
+        if (isFavorited) {
+            // Remove from favorites
+            const response = await fetch(`${API_BASE}/library/${encodeURIComponent(bookId)}?type=favorite`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                showToast(`Removed "${bookTitle}" from favorites`, 'info');
+                const icon = document.getElementById(`home-heart-${bookId}`);
+                if (icon) {
+                    icon.classList.remove('fas');
+                    icon.classList.add('far');
+                    icon.style.color = '';
+                }
+            }
+        } else {
+            // Add to favorites
+            const response = await fetch(`${API_BASE}/library`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    bookId,
+                    bookTitle,
+                    bookAuthor,
+                    bookCover,
+                    type: 'favorite'
+                })
+            });
+            
+            if (response.ok) {
+                showToast(`Added "${bookTitle}" to favorites!`, 'success');
+                const icon = document.getElementById(`home-heart-${bookId}`);
+                if (icon) {
+                    icon.classList.remove('far');
+                    icon.classList.add('fas');
+                    icon.style.color = '#e74c3c';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+        showToast('Failed to update favorites', 'error');
+    }
 }
 
-function addToBookmark(bookId) {
-    showToast('Book marked for later!', 'success');
+async function homeToggleBookmark(bookId, bookTitle, bookAuthor, bookCover) {
+    const token = localStorage.getItem('readwell_token');
+    if (!token) {
+        showToast('Please login to save bookmarks', 'error');
+        window.location.href = 'dashboard.html';
+        return;
+    }
+
+    const API_BASE = 'http://localhost:5000/api';
+    
+    try {
+        // Check if already bookmarked
+        const checkResponse = await fetch(`${API_BASE}/library/check/${encodeURIComponent(bookId)}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        let isBookmarked = false;
+        if (checkResponse.ok) {
+            const data = await checkResponse.json();
+            isBookmarked = data.type === 'bookmark';
+        }
+        
+        if (isBookmarked) {
+            // Remove from bookmarks
+            const response = await fetch(`${API_BASE}/library/${encodeURIComponent(bookId)}?type=bookmark`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                showToast(`Removed "${bookTitle}" from bookmarks`, 'info');
+                const icon = document.getElementById(`home-bookmark-${bookId}`);
+                if (icon) {
+                    icon.classList.remove('fas');
+                    icon.classList.add('far');
+                    icon.style.color = '';
+                }
+            }
+        } else {
+            // Add to bookmarks
+            const response = await fetch(`${API_BASE}/library`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    bookId,
+                    bookTitle,
+                    bookAuthor,
+                    bookCover,
+                    type: 'bookmark'
+                })
+            });
+            
+            if (response.ok) {
+                showToast(`Bookmarked "${bookTitle}"!`, 'success');
+                const icon = document.getElementById(`home-bookmark-${bookId}`);
+                if (icon) {
+                    icon.classList.remove('far');
+                    icon.classList.add('fas');
+                    icon.style.color = '#3498db';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error toggling bookmark:', error);
+        showToast('Failed to update bookmark', 'error');
+    }
 }
 
 function readBook(bookId, title, author) {

@@ -1,5 +1,7 @@
 // Shared Authentication Functions
-const API_BASE = 'http://localhost:5000/api';
+// Declare API_BASE in global scope so it can be used by other scripts
+window.API_BASE = window.API_BASE || 'http://localhost:5000/api';
+const API_BASE = window.API_BASE;
 
 let currentUser = null;
 let authToken = localStorage.getItem('readwell_token');

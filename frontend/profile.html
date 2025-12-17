@@ -199,8 +199,8 @@
 
             <div class="header-actions">
                 <div class="search-bar">
-                    <input type="text" placeholder="Search by title, author, or genre...">
-                    <button><i class="fas fa-search"></i></button>
+                    <input type="text" id="globalSearch" placeholder="Search...">
+                    <button onclick="performGlobalSearch()"><i class="fas fa-search"></i></button>
                 </div>
                 <button class="btn-notification">
                     <i class="fas fa-bell"></i>
@@ -216,10 +216,10 @@
                         <i class="fas fa-sign-in-alt"></i> Login
                     </button>
                 </div>
-                <div id="userMenu" style="display: none;">
-                    <span id="userName" style="color: #3498db !important; font-weight: 700; margin-right: 1rem; background: rgba(52, 152, 219, 0.15); padding: 0.3rem 0.6rem; border-radius: 15px;"></span>
-                    <button class="btn btn-secondary" onclick="logout()">
-                        <i class="fas fa-sign-out-alt"></i> Logout
+                <div id="userMenu" style="display: none; align-items: center; gap: 0.5rem;">
+                    <span id="userName" style="color: #3498db !important; font-weight: 700; background: rgba(52, 152, 219, 0.15); padding: 0.25rem 0.5rem; border-radius: 15px; font-size: 0.85rem; white-space: nowrap;"></span>
+                    <button class="btn btn-secondary" onclick="logout()" title="Logout" aria-label="Logout">
+                        <i class="fas fa-sign-out-alt"></i>
                     </button>
                 </div>
             </div>
@@ -253,26 +253,14 @@
 
             <!-- Profile Content -->
             <div class="profile-content">
-                <!-- Currently Reading -->
-                <div class="profile-section">
-                    <h2><i class="fas fa-book-open"></i> Currently Reading</h2>
-                    <div id="currentlyReading">
+                <!-- Books with Progress -->
+                <div class="profile-section" style="grid-column: 1 / -1;">
+                    <h2><i class="fas fa-book-open"></i> Books with Reading Progress</h2>
+                    <div id="booksWithProgress">
                         <div class="empty-state">
                             <i class="fas fa-book"></i>
-                            <p>No books in progress</p>
+                            <p>No reading progress saved yet</p>
                             <a href="browse.html" class="btn btn-primary" style="margin-top: 1rem;">Browse Books</a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Saved Quotes -->
-                <div class="profile-section">
-                    <h2><i class="fas fa-quote-left"></i> Saved Quotes</h2>
-                    <div id="savedQuotes">
-                        <div class="empty-state">
-                            <i class="fas fa-quote-left"></i>
-                            <p>No quotes saved yet</p>
-                            <p style="font-size: 0.9rem; margin-top: 0.5rem;">Save quotes while reading books</p>
                         </div>
                     </div>
                 </div>
@@ -299,6 +287,7 @@
     </footer>
 
     <script src="auth.js"></script>
+    <script src="global-search.js"></script>
     <script src="profile.js"></script>
 </body>
 </html>

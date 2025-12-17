@@ -126,8 +126,8 @@
 
             <div class="header-actions">
                 <div class="search-bar">
-                    <input type="text" placeholder="Search by title, author, or genre...">
-                    <button><i class="fas fa-search"></i></button>
+                    <input type="text" id="globalSearch" placeholder="Search...">
+                    <button onclick="performGlobalSearch()"><i class="fas fa-search"></i></button>
                 </div>
                 <button class="btn-notification">
                     <i class="fas fa-bell"></i>
@@ -143,10 +143,10 @@
                         <i class="fas fa-sign-in-alt"></i> Login
                     </button>
                 </div>
-                <div id="userMenu" style="display: none;">
-                    <span id="userName" style="color: #3498db !important; font-weight: 700; margin-right: 1rem; background: rgba(52, 152, 219, 0.15); padding: 0.3rem 0.6rem; border-radius: 15px;"></span>
-                    <button class="btn btn-secondary" onclick="logout()">
-                        <i class="fas fa-sign-out-alt"></i> Logout
+                <div id="userMenu" style="display: none; align-items: center; gap: 0.5rem;">
+                    <span id="userName" style="color: #3498db !important; font-weight: 700; background: rgba(52, 152, 219, 0.15); padding: 0.25rem 0.5rem; border-radius: 15px; font-size: 0.85rem; white-space: nowrap;"></span>
+                    <button class="btn btn-secondary" onclick="logout()" title="Logout" aria-label="Logout">
+                        <i class="fas fa-sign-out-alt"></i>
                     </button>
                 </div>
             </div>
@@ -157,8 +157,8 @@
     <main class="main-content">
         <div class="library-container">
             <div class="library-header">
-                <h1><i class="fas fa-bookmark"></i> My Library</h1>
-                <p style="color: var(--text-secondary);">Your saved books, favorites, and bookmarks</p>
+                <h1><i class="fas fa-bookmark"></i> Collection</h1>
+                <p style="color: var(--text-secondary);">Your liked and bookmarked books</p>
             </div>
 
             <!-- Stats -->
@@ -169,11 +169,11 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-number" id="favoritesCount">0</div>
-                    <div class="stat-label">Favorites</div>
+                    <div class="stat-label">Like</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number" id="bookmarksCount">0</div>
-                    <div class="stat-label">Bookmarks</div>
+                    <div class="stat-label">Bookmark</div>
                 </div>
             </div>
 
@@ -183,10 +183,10 @@
                     <i class="fas fa-book"></i> All Books
                 </button>
                 <button class="library-tab" onclick="showLibraryTab('favorite')">
-                    <i class="fas fa-heart"></i> Favorites
+                    <i class="fas fa-heart"></i> Like
                 </button>
                 <button class="library-tab" onclick="showLibraryTab('bookmark')">
-                    <i class="fas fa-bookmark"></i> Bookmarks
+                    <i class="fas fa-bookmark"></i> Bookmark
                 </button>
             </div>
 
@@ -221,7 +221,19 @@
     </footer>
 
     <script src="auth.js"></script>
+    <script src="global-search.js"></script>
     <script src="library.js"></script>
+    <script>
+        // Initialize library page when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Library page DOM loaded, initializing...');
+            if (typeof initLibrary === 'function') {
+                initLibrary();
+            } else {
+                console.error('initLibrary function not found');
+            }
+        });
+    </script>
 </body>
 </html>
 

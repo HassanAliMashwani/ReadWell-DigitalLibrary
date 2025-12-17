@@ -6,28 +6,30 @@ const router = express.Router();
 // GET /api/reading-progress - Get all reading progress for authenticated user
 router.get('/', auth, async (req, res) => {
   try {
+    console.log('Fetching reading progress for user:', req.user._id);
+    console.log('User ID type:', typeof req.user._id, req.user._id.toString());
+    
     const progress = await ReadingProgress.find({ user: req.user._id })
       .sort({ lastReadAt: -1 });
-    res.json(progress);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// GET /api/reading-progress/:bookId - Get reading progress for a specific book
-router.get('/:bookId', auth, async (req, res) => {
-  try {
-    const progress = await ReadingProgress.findOne({
-      user: req.user._id,
-      bookId: req.params.bookId
-    });
     
-    if (!progress) {
-      return res.status(404).json({ message: 'Reading progress not found' });
+    console.log('Found reading progress entries:', progress.length);
+    
+    if (progress.length > 0) {
+      console.log('First progress item user ID:', progress[0].user.toString());
+      console.log('Progress data:', JSON.stringify(progress, null, 2));
+    } else {
+      console.log('No progress found for user:', req.user._id.toString());
+      // Check if there are any progress entries at all
+      const allProgress = await ReadingProgress.find({});
+      console.log('Total progress entries in database:', allProgress.length);
+      if (allProgress.length > 0) {
+        console.log('Sample progress item user ID:', allProgress[0].user.toString());
+      }
     }
     
     res.json(progress);
   } catch (error) {
+    console.error('Error fetching reading progress:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -41,16 +43,20 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ message: 'Book ID and title are required' });
     }
 
+    const updateData = {
+      bookTitle,
+      lastReadAt: new Date()
+    };
+    
+    // Only update fields that are provided
+    if (chapter !== null && chapter !== undefined) updateData.chapter = chapter;
+    if (page !== null && page !== undefined) updateData.page = page;
+    if (paragraph !== null && paragraph !== undefined) updateData.paragraph = paragraph;
+    if (lineNumber !== null && lineNumber !== undefined) updateData.lineNumber = lineNumber;
+    
     const progress = await ReadingProgress.findOneAndUpdate(
       { user: req.user._id, bookId },
-      {
-        bookTitle,
-        chapter: chapter || 1,
-        page: page || 1,
-        paragraph: paragraph || 1,
-        lineNumber: lineNumber || 1,
-        lastReadAt: new Date()
-      },
+      updateData,
       { upsert: true, new: true }
     );
 
@@ -61,16 +67,18 @@ router.post('/', auth, async (req, res) => {
 });
 
 // POST /api/reading-progress/:bookId/quotes - Add a quote to a book
+// IMPORTANT: This route must come before /:bookId route to avoid route conflicts
 router.post('/:bookId/quotes', auth, async (req, res) => {
   try {
     const { text, chapter, page } = req.body;
+    const bookId = decodeURIComponent(req.params.bookId);
 
     if (!text) {
       return res.status(400).json({ message: 'Quote text is required' });
     }
 
     const progress = await ReadingProgress.findOneAndUpdate(
-      { user: req.user._id, bookId: req.params.bookId },
+      { user: req.user._id, bookId: bookId },
       {
         $push: {
           quotes: {
@@ -85,6 +93,7 @@ router.post('/:bookId/quotes', auth, async (req, res) => {
 
     res.json(progress);
   } catch (error) {
+    console.error('Error adding quote:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -93,10 +102,11 @@ router.post('/:bookId/quotes', auth, async (req, res) => {
 router.put('/:bookId', auth, async (req, res) => {
   try {
     const { chapter, page, paragraph, lineNumber, quotes } = req.body;
+    const bookId = decodeURIComponent(req.params.bookId);
 
     const progress = await ReadingProgress.findOne({
       user: req.user._id,
-      bookId: req.params.bookId
+      bookId: bookId
     });
 
     if (!progress) {
@@ -118,10 +128,12 @@ router.put('/:bookId', auth, async (req, res) => {
 });
 
 // DELETE /api/reading-progress/:bookId/quotes/:quoteId - Delete a quote
+// IMPORTANT: This route must come before /:bookId route to avoid route conflicts
 router.delete('/:bookId/quotes/:quoteId', auth, async (req, res) => {
   try {
+    const bookId = decodeURIComponent(req.params.bookId);
     const progress = await ReadingProgress.findOneAndUpdate(
-      { user: req.user._id, bookId: req.params.bookId },
+      { user: req.user._id, bookId: bookId },
       {
         $pull: {
           quotes: { _id: req.params.quoteId }
@@ -134,6 +146,27 @@ router.delete('/:bookId/quotes/:quoteId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Reading progress not found' });
     }
 
+    res.json(progress);
+  } catch (error) {
+    console.error('Error deleting quote:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// GET /api/reading-progress/:bookId - Get reading progress for a specific book
+// This route must come AFTER the quotes routes to avoid conflicts
+router.get('/:bookId', auth, async (req, res) => {
+  try {
+    const bookId = decodeURIComponent(req.params.bookId);
+    const progress = await ReadingProgress.findOne({
+      user: req.user._id,
+      bookId: bookId
+    });
+    
+    if (!progress) {
+      return res.status(404).json({ message: 'Reading progress not found' });
+    }
+    
     res.json(progress);
   } catch (error) {
     res.status(500).json({ message: error.message });

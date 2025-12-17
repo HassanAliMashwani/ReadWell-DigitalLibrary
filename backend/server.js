@@ -40,10 +40,7 @@ app.get('/', (req, res) => {
 // Database connection with improved error handling
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/readwell';
 
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('✅ Connected to MongoDB');
     console.log(`📊 Database: ${mongoose.connection.name}`);

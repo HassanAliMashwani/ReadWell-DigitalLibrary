@@ -30,6 +30,14 @@ class BrowseManager {
         
         // Check for URL parameters (from profile page)
         const urlParams = new URLSearchParams(window.location.search);
+        const searchQuery = urlParams.get('search');
+        if (searchQuery) {
+            this.filters.search = searchQuery;
+            const searchFilter = document.getElementById('searchFilter');
+            const globalSearch = document.getElementById('globalSearch');
+            if (searchFilter) searchFilter.value = searchQuery;
+            if (globalSearch) globalSearch.value = searchQuery;
+        }
         const bookId = urlParams.get('book');
         const action = urlParams.get('action');
         
@@ -212,6 +220,10 @@ class BrowseManager {
                 if (response.ok) {
                     this.showToast(`Added "${bookTitle}" to favorites!`, 'success');
                     this.libraryCache[bookId] = { type: 'favorite', inLibrary: true };
+                    // Reload library if on library page
+                    if (typeof loadLibrary === 'function') {
+                        setTimeout(() => loadLibrary(), 500);
+                    }
                 } else {
                     this.showToast('Failed to add to favorites', 'error');
                 }
@@ -269,6 +281,10 @@ class BrowseManager {
                 if (response.ok) {
                     this.showToast(`Bookmarked "${bookTitle}"!`, 'success');
                     this.libraryCache[bookId] = { type: 'bookmark', inLibrary: true };
+                    // Reload library if on library page
+                    if (typeof loadLibrary === 'function') {
+                        setTimeout(() => loadLibrary(), 500);
+                    }
                 } else {
                     this.showToast('Failed to bookmark', 'error');
                 }
@@ -281,34 +297,40 @@ class BrowseManager {
         }
     }
 
-    updateBookIcons(bookId) {
+    async updateBookIcons(bookId) {
         // Update heart icon
-        const heartIcons = document.querySelectorAll(`[onclick*="${bookId}"] .fa-heart`);
-        heartIcons.forEach(icon => {
-            if (this.isBookFavorited(bookId)) {
-                icon.classList.add('fas');
-                icon.classList.remove('far');
-                icon.style.color = '#e74c3c';
+        const heartIcon = document.getElementById(`heart-${bookId}`);
+        if (heartIcon) {
+            const isFavorited = await this.isBookFavorited(bookId);
+            if (isFavorited) {
+                heartIcon.classList.add('fas');
+                heartIcon.classList.remove('far');
+                heartIcon.style.color = '#e74c3c';
+                heartIcon.parentElement.setAttribute('aria-label', 'Remove from favorites');
             } else {
-                icon.classList.add('far');
-                icon.classList.remove('fas');
-                icon.style.color = '';
+                heartIcon.classList.add('far');
+                heartIcon.classList.remove('fas');
+                heartIcon.style.color = '';
+                heartIcon.parentElement.setAttribute('aria-label', 'Add to favorites');
             }
-        });
+        }
         
         // Update bookmark icon
-        const bookmarkIcons = document.querySelectorAll(`[onclick*="${bookId}"] .fa-bookmark`);
-        bookmarkIcons.forEach(icon => {
-            if (this.isBookBookmarked(bookId)) {
-                icon.classList.add('fas');
-                icon.classList.remove('far');
-                icon.style.color = '#3498db';
+        const bookmarkIcon = document.getElementById(`bookmark-${bookId}`);
+        if (bookmarkIcon) {
+            const isBookmarked = await this.isBookBookmarked(bookId);
+            if (isBookmarked) {
+                bookmarkIcon.classList.add('fas');
+                bookmarkIcon.classList.remove('far');
+                bookmarkIcon.style.color = '#3498db';
+                bookmarkIcon.parentElement.setAttribute('aria-label', 'Remove bookmark');
             } else {
-                icon.classList.add('far');
-                icon.classList.remove('fas');
-                icon.style.color = '';
+                bookmarkIcon.classList.add('far');
+                bookmarkIcon.classList.remove('fas');
+                bookmarkIcon.style.color = '';
+                bookmarkIcon.parentElement.setAttribute('aria-label', 'Bookmark this book');
             }
-        });
+        }
     }
 
     setupSearchSuggestions() {
@@ -811,6 +833,29 @@ class BrowseManager {
         }
     }
 
+    async loadLibraryStatus(books) {
+        if (!this.user) return;
+        
+        for (let book of books) {
+            try {
+                const response = await fetch(`${this.API_BASE}/library/check/${encodeURIComponent(book.id)}`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    this.libraryCache[book.id] = data;
+                    // Update icons after loading
+                    await this.updateBookIcons(book.id);
+                }
+            } catch (error) {
+                console.error('Error loading library status:', error);
+                this.libraryCache[book.id] = { inLibrary: false, type: null };
+            }
+        }
+    }
+
     getOpenLibrarySort(sortType) {
         const sortMap = {
             'newest': 'new',
@@ -1001,13 +1046,15 @@ class BrowseManager {
                          loading="lazy">
                     <div class="book-overlay">
                         ${this.user ? `
-                        <button class="btn-icon" aria-label="${this.isBookFavorited(book.id) ? 'Remove from favorites' : 'Add to favorites'}" 
-                                onclick="browseManager.toggleFavorite('${book.id}', '${book.title}')">
-                            <i class="${this.isBookFavorited(book.id) ? 'fas' : 'far'} fa-heart"></i>
+                        <button class="btn-icon" aria-label="Add to favorites" 
+                                onclick="browseManager.toggleFavorite('${book.id}', '${book.title.replace(/'/g, "\\'")}', '${(book.author || 'Unknown').replace(/'/g, "\\'")}', '${book.cover || ''}')"
+                                data-book-id="${book.id}" data-action="favorite">
+                            <i class="far fa-heart" id="heart-${book.id}"></i>
                         </button>
-                        <button class="btn-icon" aria-label="${this.isBookBookmarked(book.id) ? 'Remove bookmark' : 'Bookmark this book'}" 
-                                onclick="browseManager.toggleBookmark('${book.id}', '${book.title}')">
-                            <i class="${this.isBookBookmarked(book.id) ? 'fas' : 'far'} fa-bookmark"></i>
+                        <button class="btn-icon" aria-label="Bookmark this book" 
+                                onclick="browseManager.toggleBookmark('${book.id}', '${book.title.replace(/'/g, "\\'")}', '${(book.author || 'Unknown').replace(/'/g, "\\'")}', '${book.cover || ''}')"
+                                data-book-id="${book.id}" data-action="bookmark">
+                            <i class="far fa-bookmark" id="bookmark-${book.id}"></i>
                         </button>
                         ` : ''}
                         <button class="btn-read" 
@@ -1033,9 +1080,6 @@ class BrowseManager {
                         <button class="btn btn-primary btn-small" onclick="event.stopPropagation(); browseManager.showReadingProgress('${book.id}', '${book.title.replace(/'/g, "\\'")}')">
                             <i class="fas fa-book-open"></i> Reading Progress
                         </button>
-                        <button class="btn btn-secondary btn-small" onclick="event.stopPropagation(); browseManager.openBook('${book.id}', '${book.title.replace(/'/g, "\\'")}')">
-                            <i class="fas fa-book-reader"></i> Read Now
-                        </button>
                     </div>
                     ` : `
                     <button class="btn btn-primary btn-small" onclick="event.stopPropagation(); showLoginModal()" style="margin-top: 0.5rem;">
@@ -1047,10 +1091,8 @@ class BrowseManager {
         `;
         }).join('');
         
-        // Apply initial icon states
-        booksToShow.forEach(book => {
-            this.updateBookIcons(book.id);
-        });
+        // Icons will be updated after loadLibraryStatus completes
+        // No need to call updateBookIcons here as it's async and will be called after library status loads
     }
 
     renderRatingStars(avgRating, bookId, userRating) {
@@ -1166,59 +1208,57 @@ class BrowseManager {
         };
         
         const safeTitle = bookTitle.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const encodedBookId = encodeURIComponent(bookId);
         
         modal.innerHTML = `
             <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
                 <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
                 <h2>Reading Progress: ${safeTitle}</h2>
-                <form id="progressForm" onsubmit="event.preventDefault(); browseManager.saveReadingProgress(event, '${bookId}', '${safeTitle}')">
-                    <div class="form-group">
-                        <label>Chapter</label>
-                        <input type="number" id="progressChapter" value="${progress?.chapter || 1}" min="1" required>
+                
+                <form id="progressForm" onsubmit="event.preventDefault(); browseManager.saveAllProgress(event, '${encodedBookId}', '${safeTitle}')">
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 1rem;"><i class="fas fa-book-open"></i> Progress Details</h3>
+                        <div class="form-group">
+                            <label>Chapter (optional)</label>
+                            <input type="number" id="progressChapter" value="${progress?.chapter || ''}" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Page (optional)</label>
+                            <input type="number" id="progressPage" value="${progress?.page || ''}" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Paragraph (optional)</label>
+                            <input type="number" id="progressParagraph" value="${progress?.paragraph || ''}" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Line Number (optional)</label>
+                            <input type="number" id="progressLine" value="${progress?.lineNumber || ''}" min="0">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Page</label>
-                        <input type="number" id="progressPage" value="${progress?.page || 1}" min="1" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Paragraph</label>
-                        <input type="number" id="progressParagraph" value="${progress?.paragraph || 1}" min="1" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Line Number</label>
-                        <input type="number" id="progressLine" value="${progress?.lineNumber || 1}" min="1" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Progress
-                    </button>
-                    <a href="profile.html" class="btn btn-secondary" style="margin-left: 0.5rem;">
-                        <i class="fas fa-user"></i> View in Profile
-                    </a>
-                </form>
-                <div style="margin-top: 2rem;">
-                    <h3><i class="fas fa-quote-left"></i> Saved Quotes</h3>
-                    <div id="quotesList">
-                        ${progress?.quotes && progress.quotes.length > 0 ? 
-                            progress.quotes.map((quote, idx) => `
-                                <div class="quote-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem;">
-                                    <p style="font-style: italic; color: var(--text-primary); margin-bottom: 0.5rem;">"${quote.text}"</p>
-                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-secondary);">
-                                        <span>Chapter ${quote.chapter || 'N/A'}, Page ${quote.page || 'N/A'}, Line ${quote.line || 'N/A'}</span>
-                                        <button class="btn btn-small" onclick="browseManager.deleteQuote('${bookId}', ${idx})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </button>
+                    
+                    <div style="margin-top: 2rem; margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 1rem;"><i class="fas fa-quote-left"></i> Saved Quotes</h3>
+                        <div id="quotesList">
+                            ${progress?.quotes && progress.quotes.length > 0 ? 
+                                progress.quotes.map((quote, idx) => `
+                                    <div class="quote-item" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem;">
+                                        <p style="font-style: italic; color: var(--text-primary); margin-bottom: 0.5rem;">"${quote.text}"</p>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-secondary);">
+                                            <span>Chapter ${quote.chapter || 'N/A'}, Page ${quote.page || 'N/A'}</span>
+                                            <button type="button" class="btn btn-small" onclick="browseManager.deleteQuote('${encodedBookId}', '${quote._id || idx}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                                <i class="fas fa-trash"></i> Delete
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            `).join('') : 
-                            '<p style="color: var(--text-secondary);">No quotes saved yet.</p>'
-                        }
-                    </div>
-                    <div style="margin-top: 1.5rem;">
-                        <h4>Add Quote</h4>
-                        <form onsubmit="event.preventDefault(); browseManager.addQuote(event, '${bookId}')">
+                                `).join('') : 
+                                '<p style="color: var(--text-secondary);">No quotes saved yet.</p>'
+                            }
+                        </div>
+                        <div style="margin-top: 1.5rem;">
+                            <h4>Add New Quote</h4>
                             <div class="form-group">
                                 <label>Quote Text</label>
-                                <textarea id="quoteText" required style="width: 100%; min-height: 100px; font-family: inherit;"></textarea>
+                                <textarea id="quoteText" style="width: 100%; min-height: 100px; font-family: inherit;"></textarea>
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                                 <div class="form-group">
@@ -1230,18 +1270,24 @@ class BrowseManager {
                                     <input type="number" id="quotePage" min="1" value="${progress?.page || ''}">
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary">
+                            <button type="button" class="btn btn-secondary" onclick="browseManager.addQuoteInline('${encodedBookId}')">
                                 <i class="fas fa-plus"></i> Add Quote
                             </button>
-                        </form>
+                        </div>
                     </div>
-                </div>
+                    
+                    <div style="margin-top: 2rem; padding-top: 1rem; border-top: 2px solid var(--border-color);">
+                        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem;">
+                            <i class="fas fa-save"></i> Save All Progress & Quotes
+                        </button>
+                    </div>
+                </form>
             </div>
         `;
         document.body.appendChild(modal);
     }
 
-    async saveReadingProgress(event, bookId, bookTitle) {
+    async saveAllProgress(event, bookId, bookTitle) {
         event.preventDefault();
         
         const chapterInput = document.getElementById('progressChapter');
@@ -1255,12 +1301,12 @@ class BrowseManager {
         }
         
         const progress = {
-            bookId,
+            bookId: decodeURIComponent(bookId),
             bookTitle,
-            chapter: parseInt(chapterInput.value) || 1,
-            page: parseInt(pageInput.value) || 1,
-            paragraph: parseInt(paragraphInput.value) || 1,
-            lineNumber: parseInt(lineInput.value) || 1
+            chapter: chapterInput.value ? parseInt(chapterInput.value) : null,
+            page: pageInput.value ? parseInt(pageInput.value) : null,
+            paragraph: paragraphInput.value ? parseInt(paragraphInput.value) : null,
+            lineNumber: lineInput.value ? parseInt(lineInput.value) : null
         };
 
         try {
@@ -1275,10 +1321,21 @@ class BrowseManager {
 
             if (response.ok) {
                 this.showToast('Reading progress saved!', 'success');
-                // Reload progress
+                // Close modal and refresh
                 setTimeout(() => {
-                    this.showReadingProgress(bookId, bookTitle);
-                }, 500);
+                    const modal = document.querySelector('.modal');
+                    if (modal) modal.remove();
+                    // Reload if on profile page
+                    if (window.location.pathname.includes('profile.html')) {
+                        window.location.reload();
+                    } else {
+                        // If on browse page, reload the progress modal to show updated data
+                        const book = this.filteredBooks.find(b => b.id === decodeURIComponent(bookId));
+                        if (book) {
+                            this.showReadingProgress(decodeURIComponent(bookId), book.title);
+                        }
+                    }
+                }, 1000);
             } else {
                 const errorData = await response.json();
                 this.showToast(errorData.message || 'Failed to save progress', 'error');
@@ -1286,6 +1343,54 @@ class BrowseManager {
         } catch (error) {
             console.error('Error saving progress:', error);
             this.showToast('Failed to save progress', 'error');
+        }
+    }
+
+    async addQuoteInline(bookId) {
+        const quoteText = document.getElementById('quoteText');
+        const quoteChapter = document.getElementById('quoteChapter');
+        const quotePage = document.getElementById('quotePage');
+        
+        if (!quoteText || !quoteText.value.trim()) {
+            this.showToast('Please enter a quote', 'error');
+            return;
+        }
+        
+        const quote = {
+            text: quoteText.value.trim(),
+            chapter: quoteChapter && quoteChapter.value ? parseInt(quoteChapter.value) : null,
+            page: quotePage && quotePage.value ? parseInt(quotePage.value) : null
+        };
+
+        try {
+            const response = await fetch(`${this.API_BASE}/reading-progress/${bookId}/quotes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
+                },
+                body: JSON.stringify(quote)
+            });
+
+            if (response.ok) {
+                this.showToast('Quote added!', 'success');
+                if (quoteText) quoteText.value = '';
+                if (quoteChapter) quoteChapter.value = '';
+                if (quotePage) quotePage.value = '';
+                // Reload the modal to show updated quotes
+                const book = this.filteredBooks.find(b => b.id === decodeURIComponent(bookId));
+                if (book) {
+                    setTimeout(() => {
+                        this.showReadingProgress(decodeURIComponent(bookId), book.title);
+                    }, 500);
+                }
+            } else {
+                const errorData = await response.json();
+                this.showToast(errorData.message || 'Failed to save quote', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving quote:', error);
+            this.showToast('Failed to save quote', 'error');
         }
     }
 
@@ -1308,7 +1413,9 @@ class BrowseManager {
         };
 
         try {
-            const response = await fetch(`${this.API_BASE}/reading-progress/${bookId}/quotes`, {
+            // Encode bookId to handle special characters like /
+            const encodedBookId = encodeURIComponent(bookId);
+            const response = await fetch(`${this.API_BASE}/reading-progress/${encodedBookId}/quotes`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1341,7 +1448,9 @@ class BrowseManager {
 
     async deleteQuote(bookId, quoteId) {
         try {
-            const response = await fetch(`${this.API_BASE}/reading-progress/${bookId}/quotes/${quoteId}`, {
+            // Encode bookId to handle special characters like /
+            const encodedBookId = encodeURIComponent(bookId);
+            const response = await fetch(`${this.API_BASE}/reading-progress/${encodedBookId}/quotes/${quoteId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${this.token}`
@@ -1391,14 +1500,29 @@ class BrowseManager {
         nextBtn.classList.toggle('disabled', this.currentPage >= totalPages || totalPages === 0);
 
         let paginationHTML = '';
-        // Show current page + 4 more pages (total 5 pages visible)
-        const maxVisiblePages = 5;
+        // Show current page + 9 more pages (total 10 pages visible)
+        // But ensure we show at least 10 pages if totalPages >= 10
+        const maxVisiblePages = Math.min(10, totalPages);
         let startPage = Math.max(1, this.currentPage - Math.floor(maxVisiblePages / 2));
         let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
         // Adjust if we're near the end
-        if (endPage - startPage + 1 < maxVisiblePages) {
+        if (endPage - startPage + 1 < maxVisiblePages && totalPages >= maxVisiblePages) {
             startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+        
+        // Ensure we show at least 10 pages if available
+        if (totalPages >= 10 && endPage - startPage + 1 < 10) {
+            if (this.currentPage <= 5) {
+                startPage = 1;
+                endPage = Math.min(10, totalPages);
+            } else if (this.currentPage >= totalPages - 4) {
+                endPage = totalPages;
+                startPage = Math.max(1, totalPages - 9);
+            } else {
+                startPage = this.currentPage - 4;
+                endPage = this.currentPage + 5;
+            }
         }
 
         // Show first page if not in range

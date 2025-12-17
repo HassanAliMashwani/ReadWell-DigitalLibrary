@@ -22,53 +22,66 @@ body {
 .header {
     background: linear-gradient(135deg, #2c3e50, #34495e);
     color: white;
-    padding: 0.5rem 0;
+    padding: 0.4rem 0;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     position: sticky;
     top: 0;
     z-index: 1000;
+    width: 100%;
+    overflow: hidden;
 }
 
 .header .container {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    max-width: 1120px; /* 20% smaller than 1400px */
+    max-width: 100%;
     margin: 0 auto;
-    padding: 0 12px; /* 20% smaller padding */
+    padding: 0 10px;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
 }
 
 .logo {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 1.4rem;
+    gap: 6px;
+    font-size: 1.2rem;
     font-weight: bold;
     color: #3498db;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .logo i {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
+}
+
+.main-nav {
+    flex: 1;
+    min-width: 0;
 }
 
 .main-nav ul {
     display: flex;
     list-style: none;
-    gap: 1rem;
+    gap: 0.5rem;
     margin: 0;
     padding: 0;
+    flex-wrap: nowrap;
 }
 
 .main-nav a {
     color: white;
     text-decoration: none;
-    padding: 0.4rem 0.8rem;
+    padding: 0.3rem 0.6rem;
     border-radius: 5px;
     transition: background-color 0.3s ease;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.9rem;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
 }
 
 .main-nav a:hover,
@@ -79,7 +92,9 @@ body {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.6rem;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
 }
 
 /* User Menu Styles */
@@ -164,7 +179,83 @@ body {
     background-color: var(--bg-primary);
 }
 
-.search-bar {
+/* Header search bar - bigger and more visible */
+.header .search-bar {
+    display: flex !important;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 25px;
+    padding: 0.5rem 0.8rem;
+    gap: 0.5rem;
+    flex-shrink: 1;
+    min-width: 180px;
+    max-width: 250px;
+    overflow: hidden;
+    visibility: visible !important;
+    opacity: 1 !important;
+    height: auto;
+}
+
+.header .search-bar input {
+    background: transparent;
+    border: none;
+    color: white;
+    outline: none;
+    width: 150px;
+    font-size: 0.9rem;
+    flex: 1;
+    min-width: 120px;
+    padding: 0.3rem 0.5rem;
+    line-height: 1.4;
+}
+
+.header .search-bar input::placeholder {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85rem;
+}
+
+.header .search-bar input:focus {
+    color: white;
+}
+
+.header .search-bar input:focus::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.header .search-bar button {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0.4rem 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 50%;
+    visibility: visible !important;
+    opacity: 1 !important;
+    transition: all 0.2s ease;
+}
+
+.header .search-bar button:hover {
+    color: #3498db;
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.header .search-bar button i {
+    font-size: 1rem;
+    display: block;
+    color: white;
+}
+
+/* Browse page search bar - keep original style */
+.browse-content .search-bar,
+.main-content .search-bar {
     display: flex;
     background: white;
     border-radius: 25px;
@@ -172,7 +263,8 @@ body {
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.search-bar input {
+.browse-content .search-bar input,
+.main-content .search-bar input {
     border: none;
     padding: 0.75rem 1rem;
     width: 300px;
@@ -180,7 +272,8 @@ body {
     font-size: 0.9rem;
 }
 
-.search-bar button {
+.browse-content .search-bar button,
+.main-content .search-bar button {
     background: #3498db;
     border: none;
     color: white;
@@ -189,7 +282,8 @@ body {
     transition: background-color 0.3s ease;
 }
 
-.search-bar button:hover {
+.browse-content .search-bar button:hover,
+.main-content .search-bar button:hover {
     background: #2980b9;
 }
 
@@ -197,12 +291,13 @@ body {
     background: none;
     border: none;
     color: white;
-    font-size: 1.2rem;
+    font-size: 1rem;
     cursor: pointer;
     position: relative;
-    padding: 0.5rem;
+    padding: 0.4rem;
     border-radius: 50%;
     transition: background-color 0.3s ease;
+    flex-shrink: 0;
 }
 
 .btn-notification:hover {
@@ -281,9 +376,32 @@ body {
 }
 
 .btn-secondary {
+    padding: 0.4rem 0.5rem; /* Icon only - smaller padding */
+    font-size: 0.9rem;
     background: white;
     color: #3498db;
     border: 2px solid #3498db;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: auto;
+    flex-shrink: 0;
+}
+
+.btn-secondary .fas,
+.btn-secondary .far {
+    margin: 0;
+}
+
+/* Hide text in logout button, show only icon */
+.btn-secondary:has(.fa-sign-out-alt) {
+    padding: 0.4rem;
+    width: auto;
+}
+
+.btn-secondary:has(.fa-sign-out-alt) span,
+.btn-secondary:has(.fa-sign-out-alt)::after {
+    display: none;
 }
 
 .btn-secondary:hover {
@@ -816,12 +934,14 @@ body {
   border: none;
   color: var(--text-primary);
   cursor: pointer;
-  padding: 0.5rem;
+  padding: 0.4rem;
   border-radius: 50%;
   transition: background-color 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  font-size: 1rem;
 }
 
 .theme-toggle:hover {
